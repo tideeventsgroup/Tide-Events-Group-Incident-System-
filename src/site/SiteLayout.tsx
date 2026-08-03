@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 
 const NAV = [
@@ -10,44 +10,100 @@ const NAV = [
 ]
 
 export function SiteNav({ cta = 'Get in touch', ctaTo = '/contact' }: { cta?: string; ctaTo?: string }) {
-  return (
-    <nav className="site-nav">
-      <Link to="/" style={{ display: 'flex' }}>
-        <img
-          src="/tide-logo.png"
-          alt="Tide Events Group"
-          style={{ height: 24, width: 'auto', display: 'block' }}
-        />
-      </Link>
+  const [open, setOpen] = useState(false)
+  const { pathname } = useLocation()
 
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'clamp(14px, 2vw, 28px)',
-          flexWrap: 'wrap',
-        }}
-        className="site-nav-links"
-      >
+  // Close on navigation, and on Escape.
+  useEffect(() => setOpen(false), [pathname])
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = ''
+    }
+  }, [open])
+
+  return (
+    <>
+      <nav className="site-nav">
+        <Link to="/" style={{ display: 'flex' }} aria-label="Tide Events Group — home">
+          <img
+            src="/tide-logo.png"
+            alt="Tide Events Group"
+            style={{ height: 24, width: 'auto', display: 'block' }}
+          />
+        </Link>
+
+        <div className="nav-links">
+          {NAV.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              className="navlink"
+              style={({ isActive }) => (isActive ? { color: 'var(--accent-700)' } : undefined)}
+            >
+              {item.label}
+            </NavLink>
+          ))}
+        </div>
+
+        <Link to={ctaTo} className="nav-cta">
+          <button type="button" className="btn btn-primary">
+            {cta}
+          </button>
+        </Link>
+
+        <button
+          type="button"
+          className={`nav-toggle${open ? ' is-open' : ''}`}
+          aria-expanded={open}
+          aria-controls="site-menu"
+          aria-label={open ? 'Close menu' : 'Open menu'}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <span aria-hidden="true" />
+          <span aria-hidden="true" />
+          <span aria-hidden="true" />
+        </button>
+      </nav>
+
+      {open && (
+        <button
+          type="button"
+          className="nav-scrim"
+          aria-label="Close menu"
+          onClick={() => setOpen(false)}
+        />
+      )}
+
+      <div id="site-menu" className={`nav-panel${open ? ' is-open' : ''}`} hidden={!open}>
         {NAV.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.end}
-            className="navlink"
-            style={({ isActive }) => (isActive ? { color: 'var(--accent-700)' } : undefined)}
+            className="nav-panel-link"
+            style={({ isActive }) =>
+              isActive ? { color: 'var(--accent-700)' } : undefined
+            }
           >
             {item.label}
           </NavLink>
         ))}
+        <Link to={ctaTo} style={{ display: 'block', marginTop: 8 }}>
+          <button type="button" className="btn btn-primary" style={{ width: '100%' }}>
+            {cta}
+          </button>
+        </Link>
       </div>
-
-      <Link to={ctaTo} className="hide-sm">
-        <button type="button" className="btn btn-primary">
-          {cta}
-        </button>
-      </Link>
-    </nav>
+    </>
   )
 }
 
