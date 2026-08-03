@@ -132,6 +132,30 @@ Nothing in the record can be deleted or quietly rewritten:
   role and timestamp.
 - Ending an event sets `locked`, after which the whole event's records are read-only.
 
+## Installable (PWA)
+
+The control room installs to a tablet or phone home screen. `start_url` is `/control`,
+because the thing worth installing is the tool, not the shopfront — but `scope` stays at
+the root so the public site is still reachable from inside the installed app. Android
+shortcuts jump straight to **Log new incident** and the **Incident board**.
+
+What offline does and does not do:
+
+- **Does** cache the app shell, so the tool opens on a dead signal instead of showing a
+  browser error, and tells you plainly that you are offline.
+- **Does not** cache incident data. Every Supabase request is `NetworkOnly`, deliberately.
+  A control room acting on a stale board is more dangerous than one that knows it is
+  offline, so the data either comes from the server or does not come at all.
+- **Does not** queue incidents written while offline. That is a bigger piece of work than
+  it looks: incident references and the opening timeline entry are assigned by the
+  database, and the record is append-only, so a client-side queue would have to invent
+  provisional references and reconcile timestamps against an audit trail that is designed
+  never to be rewritten. Worth doing properly, or not at all.
+
+Updates are offered, never forced. A new build shows a "reload" prompt rather than
+refreshing the page underneath somebody halfway through logging a casualty; a background
+check runs hourly for tablets that are never closed.
+
 ## Realtime
 
 Every client subscribes to `live_pings` — a table carrying only an event id, an incident

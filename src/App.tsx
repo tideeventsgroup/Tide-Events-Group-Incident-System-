@@ -8,6 +8,7 @@ import NewIncident from './pages/NewIncident'
 import IncidentDetail from './pages/IncidentDetail'
 import History from './pages/History'
 import EventSettings from './pages/EventSettings'
+import PwaStatus from './components/PwaStatus'
 import Home from './site/Home'
 import Services from './site/Services'
 import MartynsLaw from './site/MartynsLaw'
@@ -60,6 +61,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <PwaStatus />
         <Routes>
           {/* Public site */}
           <Route path="/" element={<Home />} />
