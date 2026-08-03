@@ -139,18 +139,45 @@ because the thing worth installing is the tool, not the shopfront — but `scope
 the root so the public site is still reachable from inside the installed app. Android
 shortcuts jump straight to **Log new incident** and the **Incident board**.
 
-What offline does and does not do:
+The manifest is **not** linked from `index.html`. For a single-page app that link appears
+on every page, so a member of the public reading about Martyn's Law could be offered an
+install of an incident logging tool. It is attached at runtime, only inside `/control`.
 
-- **Does** cache the app shell, so the tool opens on a dead signal instead of showing a
-  browser error, and tells you plainly that you are offline.
-- **Does not** cache incident data. Every Supabase request is `NetworkOnly`, deliberately.
-  A control room acting on a stale board is more dangerous than one that knows it is
+### What offline does
+
+- **Caches the app shell**, so the tool opens on a dead signal instead of a browser error.
+- **Never caches incident data.** Every Supabase request is `NetworkOnly`, deliberately. A
+  control room acting on a stale board is more dangerous than one that knows it is
   offline, so the data either comes from the server or does not come at all.
-- **Does not** queue incidents written while offline. That is a bigger piece of work than
-  it looks: incident references and the opening timeline entry are assigned by the
-  database, and the record is append-only, so a client-side queue would have to invent
-  provisional references and reconcile timestamps against an audit trail that is designed
-  never to be rewritten. Worth doing properly, or not at all.
+- **Caches event configuration** — names, zones, dates — in `localStorage`, so an operator
+  who reloads on a dead signal can still open the form and pick the right zone.
+  Configuration going slightly stale is harmless; an out-of-date board is not.
+- **Queues incidents raised while offline** in IndexedDB, and drains them automatically the
+  moment the connection returns.
+
+### Offline capture, and why the record still holds up
+
+The board is not a cache, so a queued incident is not a provisional record that later gets
+rewritten — it is an insert that has not happened yet. Three things make that safe:
+
+- **Idempotency.** The queue holds the incident's primary key, generated on the device. A
+  retried flush collides on that key and is treated as already sent, so a half-completed
+  sync cannot produce a duplicate incident on the board.
+- **Honest timestamps.** `created_at` is the operator's device clock — when it happened —
+  and `synced_at` is server-authoritative. A database trigger refuses a `created_at` in the
+  future, sets `logged_offline`, and writes a timeline entry naming both times and the
+  delay between them. Nothing presents a client clock as though the server saw it live.
+- **Visible state.** Queued incidents appear on the board marked *not yet on the board*,
+  with a note that they are held on that device only and carry no incident reference until
+  they sync. They are never mixed into the live counts.
+
+References are allocated in the order the server receives incidents, so an incident raised
+offline can carry a later reference than one raised after it. That is why the gap is
+recorded rather than hidden.
+
+If the server refuses a queued incident outright — a locked event, or a permission the
+role no longer holds — it is dropped from the queue and surfaced on the board with the
+reason, rather than retried forever or silently discarded.
 
 Updates are offered, never forced. A new build shows a "reload" prompt rather than
 refreshing the page underneath somebody halfway through logging a casualty; a background

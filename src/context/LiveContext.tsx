@@ -9,10 +9,32 @@ import {
   type ReactNode,
 } from 'react'
 import { supabase } from '../lib/supabase'
+import {
+  flushQueue,
+  listPending,
+  requestDurableStorage,
+  type PendingIncident,
+} from '../lib/offlineQueue'
 import type { BoardIncident, EventRecord } from '../lib/types'
 import { useAuth } from './AuthContext'
 
 const STORAGE_KEY = 'tide.activeEventId'
+const EVENTS_KEY = 'tide.events'
+
+/**
+ * Event configuration — names, zones, dates — is cached so an operator who
+ * reloads on a dead signal can still open the form and log an incident against
+ * the right zone. Incident state is deliberately never cached: configuration
+ * going slightly stale is harmless, an out-of-date board is not.
+ */
+function cachedEvents(): EventRecord[] {
+  try {
+    const raw = localStorage.getItem(EVENTS_KEY)
+    return raw ? (JSON.parse(raw) as EventRecord[]) : []
+  } catch {
+    return []
+  }
+}
 
 interface LiveValue {
   events: EventRecord[]
@@ -27,13 +49,21 @@ interface LiveValue {
   loading: boolean
   refresh: () => Promise<void>
   refreshEvents: () => Promise<void>
+  /** Incidents raised offline and not yet accepted by the server. */
+  pending: PendingIncident[]
+  /** Queued incidents the server refused outright — needs an operator decision. */
+  rejected: PendingIncident[]
+  dismissRejected: () => void
+  syncNow: () => Promise<void>
+  /** Re-read the local queue — call after enqueuing so the board updates at once. */
+  refreshPending: () => Promise<void>
 }
 
 const Ctx = createContext<LiveValue | null>(null)
 
 export function LiveProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth()
-  const [events, setEvents] = useState<EventRecord[]>([])
+  const [events, setEvents] = useState<EventRecord[]>(cachedEvents)
   const [activeEventId, setActiveEventIdState] = useState<string | null>(
     () => localStorage.getItem(STORAGE_KEY),
   )
@@ -42,6 +72,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false)
   const [lastSync, setLastSync] = useState<Date | null>(null)
   const [loading, setLoading] = useState(true)
+  const [pending, setPending] = useState<PendingIncident[]>([])
+  const [rejected, setRejected] = useState<PendingIncident[]>([])
 
   const stampsRef = useRef<Map<string, string>>(new Map())
   const eventIdRef = useRef<string | null>(activeEventId)
@@ -60,7 +92,13 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       .select('*')
       .order('start_date', { ascending: false })
     const rows = (data as EventRecord[]) ?? []
+    if (rows.length === 0) return // offline or blocked — keep the cached config
     setEvents(rows)
+    try {
+      localStorage.setItem(EVENTS_KEY, JSON.stringify(rows))
+    } catch {
+      /* quota — the app still works, it just cannot log offline after a reload */
+    }
 
     // Land on a sensible event the first time round: the live one, else newest.
     if (rows.length > 0) {
@@ -103,6 +141,37 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     setLoading(false)
     if (changed.size > 0) setRecentlyChanged(changed)
   }, [])
+
+  const refreshPending = useCallback(async () => {
+    setPending(await listPending())
+  }, [])
+
+  const syncNow = useCallback(async () => {
+    if (!navigator.onLine) return
+    const result = await flushQueue()
+    await refreshPending()
+    if (result.rejected.length > 0) {
+      setRejected((prev) => [...prev, ...result.rejected])
+    }
+    if (result.synced > 0) await refresh()
+  }, [refresh, refreshPending])
+
+  const dismissRejected = useCallback(() => setRejected([]), [])
+
+  useEffect(() => {
+    if (!session) return
+    void requestDurableStorage()
+    void refreshPending()
+    void syncNow()
+  }, [session, refreshPending, syncNow])
+
+  // Drain the queue the moment the connection comes back.
+  useEffect(() => {
+    if (!session) return
+    const onOnline = () => void syncNow()
+    window.addEventListener('online', onOnline)
+    return () => window.removeEventListener('online', onOnline)
+  }, [session, syncNow])
 
   useEffect(() => {
     if (!session) return
@@ -155,10 +224,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!session) return
     const id = setInterval(() => {
-      if (document.visibilityState === 'visible') void refresh()
+      if (document.visibilityState !== 'visible') return
+      void refresh()
+      void syncNow()
     }, 30_000)
     return () => clearInterval(id)
-  }, [session, refresh])
+  }, [session, refresh, syncNow])
 
   useEffect(() => {
     if (recentlyChanged.size === 0) return
@@ -184,6 +255,11 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       loading,
       refresh,
       refreshEvents,
+      pending,
+      rejected,
+      dismissRejected,
+      syncNow,
+      refreshPending,
     }),
     [
       events,
@@ -197,6 +273,11 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       loading,
       refresh,
       refreshEvents,
+      pending,
+      rejected,
+      dismissRejected,
+      syncNow,
+      refreshPending,
     ],
   )
 

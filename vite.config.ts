@@ -15,49 +15,15 @@ export default defineConfig({
 
       includeAssets: ['favicon.png', 'apple-touch-icon.png', 'tide-logo.png', 'tide-logo-white.png'],
 
-      manifest: {
-        name: 'Tide Incident Management System',
-        short_name: 'Tide IMS',
-        description:
-          'Live incident logging for event control rooms — Tide Events Group Scotland.',
-        // Installing this installs the tool, not the shopfront. Scope stays
-        // at the root so the public site is still reachable from inside.
-        start_url: '/control',
-        scope: '/',
-        display: 'standalone',
-        orientation: 'any',
-        theme_color: '#333333',
-        background_color: '#FFF5F1',
-        lang: 'en-GB',
-        categories: ['business', 'productivity', 'utilities'],
-        icons: [
-          { src: '/pwa-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/pwa-512.png', sizes: '512x512', type: 'image/png' },
-          {
-            src: '/pwa-maskable-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-        shortcuts: [
-          {
-            name: 'Log new incident',
-            short_name: 'Log incident',
-            url: '/control/new',
-            icons: [{ src: '/pwa-192.png', sizes: '192x192' }],
-          },
-          {
-            name: 'Incident board',
-            short_name: 'Board',
-            url: '/control',
-            icons: [{ src: '/pwa-192.png', sizes: '192x192' }],
-          },
-        ],
-      },
+      // The manifest lives in public/ and is deliberately NOT linked from
+      // index.html. For a single-page app that link would appear on every
+      // page, so a member of the public reading about Martyn's Law could be
+      // offered an install of an incident logging tool. PwaStatus attaches it
+      // at runtime, only while the user is inside /control.
+      manifest: false,
 
       workbox: {
-        globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
+        globPatterns: ['**/*.{js,css,html,png,svg,woff2,webmanifest}'],
         navigateFallback: '/index.html',
         cleanupOutdatedCaches: true,
         clientsClaim: true,

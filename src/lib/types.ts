@@ -82,6 +82,9 @@ export interface BoardIncident {
   status: Status
   follow_up_required: boolean
   closed_at: string | null
+  /** Raised while the control room had no connection, and synced later. */
+  logged_offline: boolean
+  synced_at: string | null
   restricted: boolean
   description: string | null
   reported_by: string | null

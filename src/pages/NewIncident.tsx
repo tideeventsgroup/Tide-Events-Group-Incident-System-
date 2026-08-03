@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLive } from '../context/LiveContext'
 import { supabase } from '../lib/supabase'
+import { enqueue } from '../lib/offlineQueue'
 import { Banner, Button, ChipGroup, FieldLabel } from '../components/ui'
 import { clockSeconds } from '../lib/format'
 import { SEVERITY_COLOUR } from '../lib/style'
@@ -20,7 +21,7 @@ import {
 export default function NewIncident() {
   const navigate = useNavigate()
   const { profile, session } = useAuth()
-  const { activeEvent, refresh } = useLive()
+  const { activeEvent, refresh, syncNow, refreshPending } = useLive()
 
   const [category, setCategory] = useState<Category | null>(null)
   const [severity, setSeverity] = useState<Severity | null>(null)
@@ -91,8 +92,10 @@ export default function NewIncident() {
     setBusy(true)
 
     const payload = {
+      id: crypto.randomUUID(),
       event_id: activeEvent!.id,
       created_by: session!.user.id,
+      created_at: new Date().toISOString(),
       category,
       severity,
       location: location.trim(),
@@ -101,6 +104,16 @@ export default function NewIncident() {
       command_level: commandLevel,
       resources_deployed: resources.trim() || null,
       follow_up_required: followUp,
+    }
+
+    // No connection: hold it in the durable queue and get the operator back to
+    // the radio. It syncs itself the moment the signal returns.
+    if (!navigator.onLine) {
+      await enqueue(payload)
+      await refreshPending()
+      setBusy(false)
+      navigate('/control', { state: { queued: true } })
+      return
     }
 
     // The opening timeline entry is written by a database trigger, so a single
@@ -115,12 +128,21 @@ export default function NewIncident() {
       : await supabase.from('incidents').insert(payload)
 
     if (insertError) {
+      // The connection dropped between the check above and the request. Queue
+      // it rather than losing what the operator typed.
+      if (!navigator.onLine || insertError.message.toLowerCase().includes('fetch')) {
+        await enqueue(payload)
+        await refreshPending()
+        setBusy(false)
+        navigate('/control', { state: { queued: true } })
+        return
+      }
       setBusy(false)
       setError(insertError.message)
       return
     }
 
-    await refresh()
+    await Promise.all([refresh(), syncNow()])
 
     // A non-medical role logging a medical incident cannot open its detail
     // view, by design — send them back to the board instead.

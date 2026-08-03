@@ -1,0 +1,32 @@
+{
+  "name": "Tide Incident Management System",
+  "short_name": "Tide IMS",
+  "description": "Live incident logging for event control rooms — Tide Events Group Scotland.",
+  "start_url": "/control",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#333333",
+  "background_color": "#FFF5F1",
+  "lang": "en-GB",
+  "categories": ["business", "productivity", "utilities"],
+  "icons": [
+    { "src": "/pwa-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/pwa-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/pwa-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Log new incident",
+      "short_name": "Log incident",
+      "url": "/control/new",
+      "icons": [{ "src": "/pwa-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Incident board",
+      "short_name": "Board",
+      "url": "/control",
+      "icons": [{ "src": "/pwa-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

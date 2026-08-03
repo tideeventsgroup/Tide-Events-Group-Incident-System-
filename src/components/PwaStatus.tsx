@@ -29,6 +29,23 @@ export default function PwaStatus() {
     setUpdateSW(() => update)
   }, [])
 
+  // The manifest is attached only inside the control room, so the install
+  // prompt is offered to staff rather than to anyone reading the public site.
+  useEffect(() => {
+    const existing = document.querySelector<HTMLLinkElement>('link[rel="manifest"]')
+
+    if (!inControlRoom) {
+      existing?.remove()
+      return
+    }
+    if (existing) return
+
+    const link = document.createElement('link')
+    link.rel = 'manifest'
+    link.href = '/manifest.webmanifest'
+    document.head.appendChild(link)
+  }, [inControlRoom])
+
   useEffect(() => {
     const on = () => setOffline(false)
     const off = () => setOffline(true)
@@ -87,7 +104,7 @@ export default function PwaStatus() {
           <span style={{ fontSize: 12.5, lineHeight: 1.45 }}>
             <b>OFFLINE.</b>{' '}
             {inControlRoom
-              ? 'The board is not updating and new incidents cannot be logged until the connection returns.'
+              ? 'The board is not updating. Incidents you log now are held on this device and sync automatically when the signal returns.'
               : 'You are viewing a cached copy of this page.'}
           </span>
         </div>

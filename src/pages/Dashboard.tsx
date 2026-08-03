@@ -7,6 +7,7 @@ import { Card, Empty, RestrictedTag, SeverityBadge, Spinner, StatusPill } from '
 import { clockTime, elapsed } from '../lib/format'
 import { OPEN_STATUSES, SEVERITY_COLOUR, SEVERITY_RANK, SEVERITY_TINT } from '../lib/style'
 import { canWrite, type BoardIncident, type Severity, type TimelineEntry } from '../lib/types'
+import { Button } from '../components/ui'
 
 type SortKey = 'Time' | 'Severity' | 'Zone' | 'Category'
 
@@ -97,7 +98,18 @@ function IncidentRow({ incident, flash }: { incident: BoardIncident; flash: bool
 }
 
 export default function Dashboard() {
-  const { incidents, activeEvent, activeEventId, recentlyChanged, loading, lastSync } = useLive()
+  const {
+    incidents,
+    activeEvent,
+    activeEventId,
+    recentlyChanged,
+    loading,
+    lastSync,
+    pending,
+    rejected,
+    dismissRejected,
+    syncNow,
+  } = useLive()
   const { profile } = useAuth()
   const [sort, setSort] = useState<SortKey>('Time')
   const [commandLog, setCommandLog] = useState<TimelineEntry[]>([])
@@ -183,8 +195,76 @@ export default function Dashboard() {
     )
   }
 
+  const pendingHere = pending.filter((p) => p.event_id === activeEvent.id)
+
   return (
     <div className="px-4 pb-8 sm:px-7">
+      {rejected.length > 0 && (
+        <div className="mt-5 rounded-[3px] border border-alert bg-[#fdf2f4] px-4 py-3.5">
+          <p className="text-[12px] font-bold text-alert">
+            {rejected.length} incident{rejected.length === 1 ? '' : 's'} logged offline could not
+            be accepted by the server and {rejected.length === 1 ? 'was' : 'were'} not saved.
+          </p>
+          <ul className="mt-2 space-y-1">
+            {rejected.map((r) => (
+              <li key={r.id} className="text-[11px] leading-[1.5] text-ink">
+                <b>
+                  {r.category} · {r.severity} · {r.location}
+                </b>{' '}
+                — {r.last_error}
+                <span className="block text-faint">
+                  Raised {clockTime(r.created_at)}. Re-enter it manually if it still stands.
+                </span>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            onClick={dismissRejected}
+            className="mt-2 text-[11px] font-bold text-alert underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {pendingHere.length > 0 && (
+        <div className="mt-5 rounded-[3px] border border-line bg-white px-4 py-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[12px] font-bold text-ink">
+              <span className="tide-pulse mr-1.5 inline-block h-[7px] w-[7px] rounded-full bg-[#4A7C8C] align-middle" />
+              {pendingHere.length} incident{pendingHere.length === 1 ? '' : 's'} logged offline,
+              waiting to sync
+            </p>
+            <Button
+              variant="ghost"
+              onClick={() => void syncNow()}
+              disabled={!navigator.onLine}
+              className="!px-3 !py-1.5 !text-[11px]"
+            >
+              {navigator.onLine ? 'Sync now' : 'Waiting for signal'}
+            </Button>
+          </div>
+          <ul className="mt-2.5 divide-y divide-line-soft">
+            {pendingHere.map((p) => (
+              <li key={p.id} className="flex flex-wrap items-center gap-2 py-2">
+                <span className="text-[13px] font-bold text-ink">{clockTime(p.created_at)}</span>
+                <SeverityBadge severity={p.severity} small />
+                <span className="text-[13px] text-ink">{p.category}</span>
+                <span className="text-[12px] text-muted">{p.location}</span>
+                <span className="ml-auto rounded-[2px] border border-line bg-wash px-2 py-0.5 text-[10px] font-bold tracking-[0.5px] text-faint">
+                  NOT YET ON THE BOARD
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[11px] leading-[1.5] text-faint">
+            These are held on this device only. They are not visible to the rest of the control
+            room, and will not carry an incident reference, until they sync.
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3 pt-5 md:grid-cols-3 xl:grid-cols-5">
         <StatTile label="OPEN INCIDENTS" value={stats.open} accent="#333333" />
         <StatTile
