@@ -139,3 +139,166 @@ a:focus-visible,
     animation: none;
   }
 }
+
+/* =====================================================================
+   Installed-app shell.
+
+   The control room is used on a tablet clipped to a lectern, often
+   one-handed, often in the dark. Bottom navigation puts the primary
+   actions in thumb reach; safe-area insets keep them clear of the notch
+   and home indicator when running standalone.
+   ===================================================================== */
+
+.app-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-shell);
+  overscroll-behavior-y: none;
+}
+
+.app-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--color-ink);
+  color: #fff;
+  padding: 10px 16px;
+  padding-top: calc(10px + env(safe-area-inset-top));
+  padding-left: calc(16px + env(safe-area-inset-left));
+  padding-right: calc(16px + env(safe-area-inset-right));
+}
+
+@media (min-width: 640px) {
+  .app-bar {
+    padding-left: calc(28px + env(safe-area-inset-left));
+    padding-right: calc(28px + env(safe-area-inset-right));
+  }
+}
+
+.app-main {
+  flex: 1;
+  -webkit-overflow-scrolling: touch;
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  /* Clear the bottom bar so the last row is never trapped under it. */
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 1024px) {
+  .app-main {
+    padding-bottom: 0;
+  }
+}
+
+/* ------------------------------------------------------- bottom tabs */
+.tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  gap: 4px;
+  background: #ffffff;
+  border-top: 1px solid var(--color-line);
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  box-shadow: 0 -2px 16px rgba(51, 51, 51, 0.08);
+}
+
+.tab {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  /* Comfortably above the 44px minimum touch target. */
+  min-height: 52px;
+  padding: 6px 4px;
+  border-radius: 10px;
+  color: var(--color-muted);
+  text-decoration: none;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+
+.tab:active {
+  background: var(--color-wash);
+}
+
+.tab.is-active {
+  color: var(--color-teal);
+}
+
+.tab-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+}
+
+.tab-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+/* Logging is the reason the tool exists — give it the raised treatment. */
+.tab.is-primary .tab-icon {
+  width: 46px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--color-teal);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(37, 190, 200, 0.4);
+}
+
+.tab.is-primary.is-active .tab-icon {
+  background: var(--color-teal-dark);
+}
+
+.tab-badge {
+  position: absolute;
+  top: 2px;
+  right: calc(50% - 22px);
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--color-hold);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+}
+
+/* Plain CSS here is unlayered, so it outranks Tailwind's layered
+   utilities — lg:hidden on the bar would silently lose. Hide it here. */
+@media (min-width: 1024px) {
+  .tab-bar {
+    display: none;
+  }
+}
+
+/* Installed, the app should not feel like a page: no text selection on
+   chrome, no long-press callout, no rubber-band on the body. */
+@media (display-mode: standalone) {
+  .app-bar,
+  .tab-bar {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+  body {
+    overscroll-behavior: none;
+  }
+}

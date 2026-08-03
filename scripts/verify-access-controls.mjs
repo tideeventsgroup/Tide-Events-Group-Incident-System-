@@ -3,7 +3,7 @@
  * against a live Supabase project.
  *
  * It signs in as all four roles and asserts, among other things, that medical
- * free text never reaches a role outside Medical Lead / Ops Director — over
+ * free text never reaches a role that is not cleared for it — over
  * REST or realtime — and that nothing in the record can be deleted or
  * silently rewritten.
  *
@@ -38,7 +38,7 @@ async function login(email) {
 const ic = await login('kyle.robb@tideeventsgroup.co.uk')
 const sec = await login('security@tideeventsgroup.co.uk')
 const med = await login('medical@tideeventsgroup.co.uk')
-const ops = await login('ops@tideeventsgroup.co.uk')
+const client = await login('client@tideeventsgroup.co.uk')
 check('all four roles sign in', true)
 
 const { data: events } = await ic.client.from('events').select('*').eq('status', 'Live')
@@ -165,18 +165,18 @@ const { data: icBoard } = await ic.client
   .eq('id', medId)
   .maybeSingle()
 check(
-  'Incident Commander is also restricted from medical detail (per spec)',
-  icBoard?.restricted === true && icBoard?.description === null,
+  'Incident Commander now sees full medical detail',
+  icBoard?.restricted === false && (icBoard?.description ?? '').includes('insulin'),
 )
 
-const { data: opsBoard } = await ops.client
+const { data: clientBoard } = await client.client
   .from('incident_board')
   .select('restricted, description')
   .eq('id', medId)
   .maybeSingle()
 check(
-  'Ops Director sees full medical detail',
-  opsBoard?.restricted === false && (opsBoard?.description ?? '').includes('insulin'),
+  'Client sees medical detail for their own event',
+  clientBoard?.restricted === false && (clientBoard?.description ?? '').includes('insulin'),
 )
 
 // -------------------------------------------------- 4. change logging
@@ -229,20 +229,20 @@ const { error: descErr } = await ic.client
 check('opening description cannot be silently edited', !!descErr, descErr?.message?.slice(0, 70))
 
 // ------------------------------------------------------- 6. write guards
-const { error: opsWriteErr } = await ops.client
+const { error: clientWriteErr } = await client.client
   .from('incidents')
   .update({ status: 'Open' })
   .eq('id', sc.id)
   .select()
-const { data: opsAfter } = await ops.client
+const { data: clientAfter } = await client.client
   .from('incident_board')
   .select('status')
   .eq('id', sc.id)
   .maybeSingle()
 check(
-  'Ops Director is read-only on incidents',
-  opsAfter?.status === 'Monitoring',
-  `status still ${opsAfter?.status}${opsWriteErr ? `, err: ${opsWriteErr.message.slice(0, 40)}` : ''}`,
+  'Client is read-only on incidents',
+  clientAfter?.status === 'Monitoring',
+  `status still ${clientAfter?.status}${clientWriteErr ? `, err: ${clientWriteErr.message.slice(0, 40)}` : ''}`,
 )
 
 // ----------------------------------------------------------- 7. sign-off
@@ -290,6 +290,22 @@ check(
   'audit log not readable by Security Supervisor',
   (auditSec ?? []).length === 0,
   `${auditSec?.length ?? 0} rows`,
+)
+
+// ------------------------------------------------ 8b. client event scoping
+const { data: clientEvents } = await client.client.from('events').select('name')
+const { data: staffEvents } = await ic.client.from('events').select('name')
+check(
+  'Client sees only the events they are linked to',
+  (clientEvents ?? []).length === 1 && clientEvents[0].name.includes('2026'),
+  `client: ${(clientEvents ?? []).map((e) => e.name).join(', ')} | staff: ${(staffEvents ?? []).length} events`,
+)
+
+const { data: clientBoardAll } = await client.client.from('incident_board').select('event_name')
+check(
+  'Client board carries no other event',
+  (clientBoardAll ?? []).every((r) => r.event_name.includes('2026')),
+  `${new Set((clientBoardAll ?? []).map((r) => r.event_name)).size} event(s) on their board`,
 )
 
 // --------------------------------------------------------- 9. anon access

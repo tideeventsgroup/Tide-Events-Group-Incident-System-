@@ -25,7 +25,7 @@ export const ROLES = [
   'Incident Commander',
   'Security Supervisor',
   'Medical Lead',
-  'Ops Director',
+  'Client',
 ] as const
 
 export const EVENT_STATUSES = ['Standby', 'Live', 'Closed'] as const
@@ -140,9 +140,13 @@ export function canWrite(role: Role | undefined): boolean {
   )
 }
 
-/** Medical free text is restricted to these roles (GDPR — health data). */
+/**
+ * Medical free text is health data, so it is restricted (GDPR). The Incident
+ * Commander owns the incident and the Medical Lead runs the clinical response;
+ * the Client is the organiser, granted sight of their own event by agreement.
+ */
 export function canSeeMedical(role: Role | undefined): boolean {
-  return role === 'Medical Lead' || role === 'Ops Director'
+  return role === 'Incident Commander' || role === 'Medical Lead' || role === 'Client'
 }
 
 /** Closing and signing off an incident, and setting command level. */
@@ -150,6 +154,12 @@ export function canSignOff(role: Role | undefined): boolean {
   return role === 'Incident Commander' || role === 'Medical Lead'
 }
 
+/** Event configuration, team and retention. */
 export function canManageEvent(role: Role | undefined): boolean {
-  return role === 'Incident Commander' || role === 'Ops Director'
+  return role === 'Incident Commander'
+}
+
+/** The audit log and website enquiries. */
+export function canSeeAudit(role: Role | undefined): boolean {
+  return role === 'Incident Commander'
 }

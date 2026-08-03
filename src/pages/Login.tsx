@@ -7,7 +7,7 @@ const ROLE_BLURB: Record<string, string> = {
   'Incident Commander': 'Full oversight, closes incidents, sets command level',
   'Security Supervisor': 'Logs and updates security & crowd incidents',
   'Medical Lead': 'Manages medical incidents, casualty handovers',
-  'Ops Director': 'Read access, history, audit & export rights',
+  Client: 'Read access to their own event, history and exports',
 }
 
 export default function Login() {
@@ -55,7 +55,7 @@ export default function Login() {
         </p>
         <h1 className="mb-1 text-[22px] font-bold text-ink">Sign in to event control</h1>
         <p className="mb-6 text-[13px] text-muted">
-          Your role and permissions are assigned to your account by the Ops Director.
+          Your role and permissions are assigned to your account by the Incident Commander.
         </p>
 
         <FieldLabel htmlFor="email">EMAIL</FieldLabel>
@@ -105,8 +105,9 @@ export default function Login() {
             ))}
           </div>
           <p className="mt-3 text-[11px] leading-[1.5] text-faint">
-            Medical incident detail is visible to the Medical Lead and Ops Director only. All
-            other roles see category, severity and status without the clinical narrative.
+            Medical incident detail is visible to the Incident Commander, Medical Lead and the
+            event's Client. A Security Supervisor sees category, severity and status without the
+            clinical narrative.
           </p>
         </div>
       </form>

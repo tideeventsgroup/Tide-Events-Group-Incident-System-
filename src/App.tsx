@@ -34,7 +34,7 @@ function ControlRoom() {
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-shell px-6 text-center">
         <p className="text-[14px] font-bold text-ink">No control room profile</p>
         <p className="max-w-md text-[13px] text-muted">
-          Your account is authenticated but has no assigned role. Ask an Ops Director to set one up
+          Your account is authenticated but has no assigned role. Ask an Incident Commander to set one up
           before you can access the incident board.
         </p>
       </div>

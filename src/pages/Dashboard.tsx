@@ -20,23 +20,29 @@ const COMMAND_RANK: Record<string, number> = {
 
 function StatTile({
   label,
+  short,
   value,
   accent,
   valueColour,
 }: {
   label: string
+  /** Abbreviated for the compact phone strip, where four sit across. */
+  short: string
   value: string | number
   accent: string
   valueColour?: string
 }) {
   return (
     <div
-      className="rounded-[3px] border border-line bg-white px-4 py-3.5"
+      className="rounded-[3px] border border-line bg-white px-3 py-2.5 sm:px-4 sm:py-3.5"
       style={{ borderLeft: `4px solid ${accent}` }}
     >
-      <div className="text-[11px] font-bold tracking-[0.5px] text-muted">{label}</div>
+      <div className="text-[10px] leading-tight font-bold tracking-[0.5px] text-muted sm:text-[11px]">
+        <span className="sm:hidden">{short}</span>
+        <span className="hidden sm:inline">{label}</span>
+      </div>
       <div
-        className="text-[30px] leading-[1.2] font-bold"
+        className="text-[24px] leading-[1.2] font-bold sm:text-[30px]"
         style={{ color: valueColour ?? '#333333' }}
       >
         {value}
@@ -265,26 +271,35 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 pt-5 md:grid-cols-3 xl:grid-cols-5">
-        <StatTile label="OPEN INCIDENTS" value={stats.open} accent="#333333" />
+      <div className="grid grid-cols-4 gap-2 pt-4 sm:gap-3 sm:pt-5 md:grid-cols-3 xl:grid-cols-5">
+        <StatTile label="OPEN INCIDENTS" short="OPEN" value={stats.open} accent="#333333" />
         <StatTile
           label="CRITICAL"
+          short="CRIT"
           value={stats.critical}
           accent={SEVERITY_COLOUR.Critical}
           valueColour={stats.critical > 0 ? SEVERITY_COLOUR.Critical : undefined}
         />
         <StatTile
           label="MAJOR"
+          short="MAJOR"
           value={stats.major}
           accent={SEVERITY_COLOUR.Major}
           valueColour={stats.major > 0 ? SEVERITY_COLOUR.Major : undefined}
         />
-        <StatTile label="RESOURCES DEPLOYED" value={stats.resourced} accent="#333333" />
-        <div className="col-span-2 rounded-[3px] bg-ink px-4 py-3.5 md:col-span-1">
-          <div className="text-[11px] font-bold tracking-[0.5px] text-[#d8d8d8]">
-            HIGHEST COMMAND ENGAGED
+        <StatTile
+          label="RESOURCES DEPLOYED"
+          short="RES"
+          value={stats.resourced}
+          accent="#333333"
+        />
+        {/* One slim line on a phone; a tile alongside the rest on desktop. */}
+        <div className="col-span-4 flex items-baseline gap-2 rounded-[3px] bg-ink px-3 py-2 sm:px-4 sm:py-3.5 md:col-span-3 md:block xl:col-span-1">
+          <div className="text-[10px] leading-tight font-bold tracking-[0.5px] whitespace-nowrap text-[#d8d8d8] sm:text-[11px]">
+            HIGHEST COMMAND
+            <span className="hidden sm:inline"> ENGAGED</span>
           </div>
-          <div className="mt-0.5 text-[18px] leading-[1.3] font-bold text-teal">
+          <div className="text-[13px] leading-tight font-bold text-teal sm:mt-0.5 sm:text-[18px]">
             {stats.highest}
           </div>
         </div>

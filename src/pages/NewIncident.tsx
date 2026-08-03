@@ -213,8 +213,8 @@ export default function NewIncident() {
           <div className="mb-6">
             <Banner tone="info">
               🔒 Medical detail is restricted. You may log this incident, but its description and
-              timeline will only be readable by the Medical Lead and Ops Director — including to
-              you, after submission.
+              timeline will only be readable by roles cleared for medical detail — which, after
+              submission, will not include you.
             </Banner>
           </div>
         )}

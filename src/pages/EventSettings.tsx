@@ -166,7 +166,7 @@ export default function EventSettings() {
             <NewEventForm onDone={() => void refreshEvents()} />
           ) : (
             <Banner tone="info">
-              No events exist yet. An Incident Commander or Ops Director can create one.
+              No events exist yet. An Incident Commander can create one.
             </Banner>
           )}
         </Card>
@@ -213,7 +213,7 @@ export default function EventSettings() {
         <div className="mb-4">
           <Banner tone="info">
             Your role has read access to event configuration. Changes are made by the Incident
-            Commander or Ops Director.
+            Commander.
           </Banner>
         </div>
       )}
@@ -454,28 +454,24 @@ export default function EventSettings() {
                 <div className="text-[12px] text-muted">{member.role}</div>
                 <div
                   className="text-[11px] font-bold"
-                  style={{
-                    color: member.role === 'Ops Director' ? '#6b6b6b' : '#3D8361',
-                  }}
+                  style={{ color: member.role === 'Client' ? '#6b6b6b' : '#3D8361' }}
                 >
-                  {member.role === 'Ops Director' ? 'Read & export' : 'Log & update'}
-                  {member.role === 'Medical Lead' || member.role === 'Ops Director'
-                    ? ' · medical'
-                    : ''}
+                  {member.role === 'Client' ? 'Read & export' : 'Log & update'}
+                  {member.role !== 'Security Supervisor' ? ' · medical' : ''}
                 </div>
               </div>
             ))}
             <p className="mt-3 border-t border-line-soft pt-3 text-[11px] leading-[1.5] text-faint">
               Accounts are created in Supabase Auth. Role assignment is enforced in the database,
-              not the interface — only an Ops Director can change one.
+              not the interface — only an Incident Commander can change one. Clients are linked to
+              specific events and cannot see any other client's incidents.
             </p>
           </Card>
 
           <Card title="Recent Audit Trail">
             {audit.length === 0 ? (
               <p className="text-[12px] text-faint">
-                No audit entries visible. This log is readable by the Incident Commander and Ops
-                Director.
+                No audit entries visible. This log is readable by the Incident Commander.
               </p>
             ) : (
               <ul className="space-y-2">

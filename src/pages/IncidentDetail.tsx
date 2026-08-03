@@ -254,8 +254,8 @@ export default function IncidentDetail() {
     return (
       <div className="mx-auto max-w-[1080px] px-4 py-8 sm:px-7">
         <Banner tone="error">
-          This incident could not be opened. It may be a medical record restricted to the Medical
-          Lead and Ops Director.
+          This incident could not be opened. It may belong to an event you are not linked to, or be
+          a medical record your role cannot see.
         </Banner>
         <p className="mt-4">
           <Link to="/control" className="text-[13px] font-bold text-teal underline">
@@ -353,8 +353,8 @@ export default function IncidentDetail() {
           <Card title="Incident Timeline">
             {timeline.length === 0 ? (
               <Banner tone="info">
-                🔒 The narrative for this incident is restricted to the Medical Lead and Ops
-                Director. You can see its category, severity, location and status above.
+                🔒 The narrative for this incident is restricted. You can see its category, severity,
+                location and status above.
               </Banner>
             ) : (
               <ol className="mt-1">

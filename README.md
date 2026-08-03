@@ -73,14 +73,15 @@ not in the interface.
 | `audit_log` | Machine-written field-level change history with actor and timestamp |
 | `profiles` | Control room personnel and their role |
 | `enquiries` | Public contact-form submissions — `anon` may INSERT only, never read |
+| `event_access` | Which events a Client is linked to. Tide staff are not listed; they see everything |
 | `live_pings` | Content-free realtime signalling (see below) |
 
 Two views sit in front of the tables and are what the app actually reads:
 
 - **`incident_board`** — the status board. Runs with definer rights so *every* role sees
   the structured summary of a medical incident (category, severity, zone, status, command
-  level) while the free text is masked in place for anyone outside Medical Lead / Ops
-  Director. Carries its own `auth.uid()` guard.
+  level) while the free text is masked in place for anyone without medical clearance. It
+  also enforces client event scoping, and carries its own `auth.uid()` guard.
 - **`incident_timeline`** — the narrative. Runs with invoker rights, so RLS decides what
   comes back and medical entry bodies never leave the server for other roles.
 
@@ -99,21 +100,27 @@ Two enums follow Tide's operating model rather than the generic naming:
 
 ## Roles
 
-| Role | Log & update | Close & sign off | Medical detail | Event config | Audit log |
-| --- | --- | --- | --- | --- | --- |
-| Incident Commander | ✅ | ✅ | — | ✅ | ✅ |
-| Security Supervisor | ✅ | — | — | — | — |
-| Medical Lead | ✅ | ✅ | ✅ | — | — |
-| Ops Director | — | — | ✅ | ✅ | ✅ |
+| Role | Log & update | Close & sign off | Medical detail | Event config | Audit log | Events visible |
+| --- | --- | --- | --- | --- | --- | --- |
+| Incident Commander | ✅ | ✅ | ✅ | ✅ | ✅ | all |
+| Security Supervisor | ✅ | — | — | — | — | all |
+| Medical Lead | ✅ | ✅ | ✅ | — | — | all |
+| Client | — | — | ✅ | — | — | **only theirs** |
 
-Medical restriction is per the GDPR brief: clinical narrative is visible to the **Medical
-Lead and Ops Director only**. That includes the Incident Commander, who sees that a Major
-medical incident is open in Zone C, with what resources and at what command level — but
-not the casualty's condition.
+The **Incident Commander** owns the incident, so they see all of it and are the only role
+that can change event configuration, assign roles, or read the audit log and website
+enquiries.
 
-A Security Supervisor can still *raise* a medical incident (they are often first on the
-radio); they simply cannot read it back afterwards. The opening timeline entry is written
-by a database trigger precisely so that this works.
+The **Client** is the event organiser. They are read-only and scoped through the
+`event_access` table to the events they are linked to, so one client can never see
+another's incidents. They can see medical detail for their own event by agreement — this
+is health data, so make sure your contract and privacy notice actually cover sharing it
+with the organiser.
+
+The **Security Supervisor** is the only role without medical clearance. They can still
+*raise* a medical incident (they are often first on the radio) but cannot read it back
+afterwards. The opening timeline entry is written by a database trigger precisely so that
+this works.
 
 ---
 
