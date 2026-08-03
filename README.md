@@ -144,8 +144,14 @@ brand accent, and contains no orange:
 
 ## Deployment
 
-Vercel, with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` set as environment
-variables. `vercel.json` rewrites all paths to `index.html` for client-side routing.
+Vercel. `vercel.json` rewrites all paths to `index.html` for client-side routing.
+
+`.env.production` is committed on purpose: a Supabase *publishable* key is designed to sit
+in a browser bundle, and every access decision is made by row level security in Postgres
+rather than by keeping that key secret. Committing it means the repo builds and deploys
+anywhere with no extra configuration. Point it at a different project by editing that file,
+or override it with real Vercel environment variables if you prefer. Never put the
+**service role** key anywhere near this repo.
 
 Database migrations are in `supabase/migrations/`, applied in order.
 
