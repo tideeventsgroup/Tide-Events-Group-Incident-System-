@@ -1,0 +1,120 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: Arial, Helvetica, sans-serif;
+
+  /* Tide brand */
+  --color-ink: #333333;
+  --color-teal: #25bec8;
+  --color-teal-dark: #1ba5ae;
+  --color-shell: #fff5f1;
+
+  /* Neutral chrome derived from the brand shell */
+  --color-line: #e0dad5;
+  --color-line-soft: #f1ebe8;
+  --color-line-input: #d8cfca;
+  --color-muted: #6b6b6b;
+  --color-faint: #8a8a8a;
+  --color-wash: #faf6f4;
+  --color-wash-active: #fff9f7;
+
+  /* Escalation scale — deliberately separate from the brand teal.
+     Neutral through to crimson; saturation rises with severity. */
+  --color-sev-minor: #6b7280;
+  --color-sev-moderate: #8c5a66;
+  --color-sev-major: #a31b32;
+  --color-sev-critical: #c41e3a;
+
+  /* Status semantics */
+  --color-alert: #c41e3a;
+  --color-hold: #4a7c8c;
+  --color-ok: #3d8361;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-shell);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
+::placeholder {
+  color: #9a9a9a;
+}
+
+/* Native controls, given the Tide field treatment once rather than per use. */
+input[type='text'],
+input[type='password'],
+input[type='email'],
+input[type='date'],
+input[type='number'],
+select,
+textarea {
+  font-family: Arial, Helvetica, sans-serif;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--color-line-input);
+  border-radius: 3px;
+  font-size: 14px;
+  color: var(--color-ink);
+  background: #ffffff;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-teal);
+  outline-offset: -1px;
+  border-color: var(--color-teal);
+}
+
+textarea {
+  resize: vertical;
+}
+
+button:focus-visible,
+a:focus-visible,
+[role='button']:focus-visible {
+  outline: 2px solid var(--color-teal);
+  outline-offset: 2px;
+}
+
+@keyframes tide-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.tide-pulse {
+  animation: tide-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes tide-flash {
+  from {
+    background-color: #e6f9fa;
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.tide-flash {
+  animation: tide-flash 1.8s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tide-pulse,
+  .tide-flash {
+    animation: none;
+  }
+}
