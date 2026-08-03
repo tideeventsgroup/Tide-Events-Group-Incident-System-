@@ -258,7 +258,7 @@ export default function IncidentDetail() {
           Lead and Ops Director.
         </Banner>
         <p className="mt-4">
-          <Link to="/" className="text-[13px] font-bold text-teal underline">
+          <Link to="/control" className="text-[13px] font-bold text-teal underline">
             ← Back to dashboard
           </Link>
         </p>
@@ -272,7 +272,7 @@ export default function IncidentDetail() {
     <div className="mx-auto max-w-[1080px] px-4 pt-5 pb-16 sm:px-7">
       <button
         type="button"
-        onClick={() => navigate('/')}
+        onClick={() => navigate('/control')}
         className="text-[12px] text-faint hover:text-ink"
       >
         ← Back to dashboard

@@ -268,7 +268,7 @@ export default function History() {
               pageRows.map((r) => (
                 <Link
                   key={r.id}
-                  to={`/incident/${r.id}`}
+                  to={`/control/incident/${r.id}`}
                   className="block border-b border-line-soft no-underline last:border-b-0 hover:bg-wash"
                 >
                   <div className="hidden grid-cols-[86px_1.2fr_92px_100px_1.3fr_140px_90px] items-center gap-2 px-[18px] py-3 lg:grid">

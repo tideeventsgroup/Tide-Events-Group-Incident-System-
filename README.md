@@ -1,10 +1,35 @@
-# Tide Incident Management System
+# Tide Events Group
 
-Live incident logging for event control rooms — **Tide Events Group Scotland**.
+Two things in one React app:
 
-React + Tailwind on the front, Supabase (Postgres, Auth, Realtime) behind it. Built to be
-multi-event and multi-client from the first row, and to hold up as audit evidence for
-licensing reviews, SAG debriefs and Martyn's Law.
+1. **The public site** at `/` — the Tide Events Group marketing site (Home, Services,
+   Martyn's Law, About, Contact), with a working Martyn's Law tier checker and a contact
+   form that writes real enquiries to the database.
+2. **The Incident Management System** at `/control` — live incident logging for event
+   control rooms, built to be multi-event and multi-client from the first row and to hold
+   up as audit evidence for licensing reviews, SAG debriefs and Martyn's Law.
+
+Supabase (Postgres, Auth, Realtime) behind both. Staff reach the control room from the
+**Control Room Login** button in the site footer.
+
+## Routes
+
+| Path | What |
+| --- | --- |
+| `/` | Home |
+| `/services` | Services — six disciplines |
+| `/martyns-law` | Martyn's Law explainer + interactive tier checker |
+| `/about` | About |
+| `/contact` | Contact form (writes to `enquiries`) |
+| `/control` | Control room dashboard (sign-in required) |
+| `/control/new` | Log a new incident |
+| `/control/incident/:id` | Incident detail + timeline |
+| `/control/history` | History, search and audit export |
+| `/control/settings` | Event settings, team, retention |
+
+The two halves are deliberately different design languages: League Spartan and generous
+whitespace out front, dense Arial and a severity-coded board in the control room. One is a
+shopfront, the other is a tool used at 3am in a wind warning.
 
 ---
 
@@ -47,6 +72,7 @@ not in the interface.
 | `incident_updates` | Append-only chronological timeline for each incident — who, what, when |
 | `audit_log` | Machine-written field-level change history with actor and timestamp |
 | `profiles` | Control room personnel and their role |
+| `enquiries` | Public contact-form submissions — `anon` may INSERT only, never read |
 | `live_pings` | Content-free realtime signalling (see below) |
 
 Two views sit in front of the tables and are what the app actually reads:

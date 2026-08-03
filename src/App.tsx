@@ -8,8 +8,14 @@ import NewIncident from './pages/NewIncident'
 import IncidentDetail from './pages/IncidentDetail'
 import History from './pages/History'
 import EventSettings from './pages/EventSettings'
+import Home from './site/Home'
+import Services from './site/Services'
+import MartynsLaw from './site/MartynsLaw'
+import About from './site/About'
+import Contact from './site/Contact'
 
-function Gate() {
+/** The control room. Everything behind /control requires a signed-in profile. */
+function ControlRoom() {
   const { session, profile, loading } = useAuth()
 
   if (!session) return <Login />
@@ -27,8 +33,8 @@ function Gate() {
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-shell px-6 text-center">
         <p className="text-[14px] font-bold text-ink">No control room profile</p>
         <p className="max-w-md text-[13px] text-muted">
-          Your account is authenticated but has no assigned role. Ask an Ops Director to set one
-          up before you can access the incident board.
+          Your account is authenticated but has no assigned role. Ask an Ops Director to set one up
+          before you can access the incident board.
         </p>
       </div>
     )
@@ -38,12 +44,12 @@ function Gate() {
     <LiveProvider>
       <AppShell>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/new" element={<NewIncident />} />
-          <Route path="/incident/:id" element={<IncidentDetail />} />
-          <Route path="/history" element={<History />} />
-          <Route path="/settings" element={<EventSettings />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route index element={<Dashboard />} />
+          <Route path="new" element={<NewIncident />} />
+          <Route path="incident/:id" element={<IncidentDetail />} />
+          <Route path="history" element={<History />} />
+          <Route path="settings" element={<EventSettings />} />
+          <Route path="*" element={<Navigate to="/control" replace />} />
         </Routes>
       </AppShell>
     </LiveProvider>
@@ -54,7 +60,19 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Gate />
+        <Routes>
+          {/* Public site */}
+          <Route path="/" element={<Home />} />
+          <Route path="/services" element={<Services />} />
+          <Route path="/martyns-law" element={<MartynsLaw />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/contact" element={<Contact />} />
+
+          {/* Incident Management System */}
+          <Route path="/control/*" element={<ControlRoom />} />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </AuthProvider>
     </BrowserRouter>
   )

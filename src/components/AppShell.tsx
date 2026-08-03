@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { Link, NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLive } from '../context/LiveContext'
 import { clockSeconds, dayLabel, addDays } from '../lib/format'
@@ -7,10 +7,10 @@ import { initials } from '../lib/style'
 import { canWrite } from '../lib/types'
 
 const NAV = [
-  { to: '/', label: 'Dashboard', end: true },
-  { to: '/new', label: 'New Incident', end: false, writeOnly: true },
-  { to: '/history', label: 'Incident History', end: false },
-  { to: '/settings', label: 'Event Settings', end: false },
+  { to: '/control', label: 'Dashboard', end: true },
+  { to: '/control/new', label: 'New Incident', end: false, writeOnly: true },
+  { to: '/control/history', label: 'Incident History', end: false },
+  { to: '/control/settings', label: 'Event Settings', end: false },
 ]
 
 function LiveClock() {
@@ -111,10 +111,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <p className="mt-2 border-t border-line-soft pt-2 text-[11px] text-faint">
                   {profile?.email}
                 </p>
+                <Link
+                  to="/"
+                  className="mt-3 block rounded-[3px] border border-line px-3 py-2.5 text-center text-[12px] font-bold text-muted no-underline hover:bg-wash"
+                >
+                  ← Tide public site
+                </Link>
                 <button
                   type="button"
                   onClick={() => void signOut()}
-                  className="mt-3 w-full rounded-[3px] bg-ink px-3 py-2.5 text-[12px] font-bold text-white"
+                  className="mt-2 w-full rounded-[3px] bg-ink px-3 py-2.5 text-[12px] font-bold text-white"
                 >
                   Sign out
                 </button>

@@ -126,9 +126,9 @@ export default function NewIncident() {
     // view, by design — send them back to the board instead.
     const created = data as { id?: string } | null
     if (created?.id) {
-      navigate(`/incident/${created.id}`)
+      navigate(`/control/incident/${created.id}`)
     } else {
-      navigate('/')
+      navigate('/control')
     }
   }
 
@@ -303,7 +303,7 @@ export default function NewIncident() {
         )}
 
         <div className="flex flex-wrap justify-end gap-3 border-t border-line-soft pt-5">
-          <Button type="button" variant="ghost" onClick={() => navigate('/')}>
+          <Button type="button" variant="ghost" onClick={() => navigate('/control')}>
             Cancel
           </Button>
           <Button type="submit" disabled={busy} className="!text-[15px] tracking-[0.5px]">

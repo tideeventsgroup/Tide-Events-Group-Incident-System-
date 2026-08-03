@@ -48,7 +48,7 @@ function IncidentRow({ incident, flash }: { incident: BoardIncident; flash: bool
   const live = incident.status !== 'Resolved'
   return (
     <Link
-      to={`/incident/${incident.id}`}
+      to={`/control/incident/${incident.id}`}
       className={`block border-b border-line-soft no-underline last:border-b-0 ${flash ? 'tide-flash' : ''}`}
       style={{
         backgroundColor: live ? SEVERITY_TINT[incident.severity] : undefined,
@@ -248,7 +248,7 @@ export default function Dashboard() {
               {canWrite(profile?.role) && (
                 <>
                   {' '}
-                  <Link to="/new" className="font-bold text-teal underline">
+                  <Link to="/control/new" className="font-bold text-teal underline">
                     Log the first one
                   </Link>
                   .
