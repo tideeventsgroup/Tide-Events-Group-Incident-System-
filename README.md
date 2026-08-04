@@ -24,6 +24,8 @@ Supabase (Postgres, Auth, Realtime) behind both. Staff reach the control room fr
 | `/control` | Control room dashboard (sign-in required) |
 | `/control/new` | Log a new incident |
 | `/control/incident/:id` | Incident detail + timeline |
+| `/control/log` | Event log — radio traffic, handovers, checks |
+| `/control/methane` | M/ETHANE reports and major incident declaration |
 | `/control/history` | History, search and audit export |
 | `/control/settings` | Event settings, team, retention |
 
@@ -74,6 +76,8 @@ not in the interface.
 | `profiles` | Control room personnel and their role |
 | `enquiries` | Public contact-form submissions — `anon` may INSERT only, never read |
 | `event_access` | Which events a Client is linked to. Tide staff are not listed; they see everything |
+| `methane_reports` | Append-only M/ETHANE snapshots, per JESIP |
+| `event_log` | The radio loggist's running log — traffic that is not an incident |
 | `live_pings` | Content-free realtime signalling (see below) |
 
 Two views sit in front of the tables and are what the app actually reads:
@@ -121,6 +125,42 @@ The **Security Supervisor** is the only role without medical clearance. They can
 *raise* a medical incident (they are often first on the radio) but cannot read it back
 afterwards. The opening timeline entry is written by a database trigger precisely so that
 this works.
+
+---
+
+## Control room practice
+
+Three things here come from how event control rooms actually run rather than from the
+original brief.
+
+### M/ETHANE
+
+[JESIP](https://www.jesip.org.uk/joint-doctrine/early-stages-of-an-incident-m-ethane/) makes
+M/ETHANE the common structure for passing major incident information, and expects control
+rooms to prompt for it and take repeat updates as the picture changes. So reports are
+**append-only snapshots**, not one editable record — the current state is read off the
+latest report, and the history shows how understanding developed. Drop the M and the same
+form is an ETHANE report, below the major incident threshold.
+
+Whoever is on scene sends the report, so any role that can work an incident can send one.
+Declaring a **major incident** is a command decision and is reserved to the Incident
+Commander — enforced in the insert policy, not just greyed out in the interface. A report
+linked to an incident writes itself onto that incident's timeline.
+
+### Event log
+
+Control rooms staff a radio loggist, and most of what they log is not an incident: gates
+opening, shift handovers, wind readings, a contractor signing in. Forcing that through the
+incident form slows the operator down and, worse, pollutes the incident statistics a
+debrief depends on. The event log is the other half of the record — same append-only
+treatment, typed and filterable, grouped by day.
+
+### Review due
+
+An open incident with no timeline entry for longer than its severity allows is flagged on
+the board and counted in the stat strip. Thresholds are 15 minutes for Critical, 30 for
+Major, 60 for Moderate, 120 for Minor. Control rooms lose incidents to silence, not to
+disagreement.
 
 ---
 

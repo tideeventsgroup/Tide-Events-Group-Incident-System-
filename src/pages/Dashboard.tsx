@@ -6,7 +6,13 @@ import { supabase } from '../lib/supabase'
 import { Card, Empty, RestrictedTag, SeverityBadge, Spinner, StatusPill } from '../components/ui'
 import { clockTime, elapsed } from '../lib/format'
 import { OPEN_STATUSES, SEVERITY_COLOUR, SEVERITY_RANK, SEVERITY_TINT } from '../lib/style'
-import { canWrite, type BoardIncident, type Severity, type TimelineEntry } from '../lib/types'
+import {
+  canWrite,
+  reviewOverdueBy,
+  type BoardIncident,
+  type Severity,
+  type TimelineEntry,
+} from '../lib/types'
 import { Button } from '../components/ui'
 
 type SortKey = 'Time' | 'Severity' | 'Zone' | 'Category'
@@ -51,8 +57,20 @@ function StatTile({
   )
 }
 
+function ReviewDue({ minutes }: { minutes: number }) {
+  return (
+    <span
+      className="inline-block rounded-[2px] bg-ink px-1.5 py-[3px] text-[9px] font-bold tracking-[0.5px] whitespace-nowrap text-white"
+      title="No timeline entry for longer than this severity allows"
+    >
+      REVIEW DUE · {minutes >= 60 ? `${Math.floor(minutes / 60)}h${minutes % 60}m` : `${minutes}m`}
+    </span>
+  )
+}
+
 function IncidentRow({ incident, flash }: { incident: BoardIncident; flash: boolean }) {
   const live = incident.status !== 'Resolved'
+  const overdue = reviewOverdueBy(incident)
   return (
     <Link
       to={`/control/incident/${incident.id}`}
@@ -65,9 +83,10 @@ function IncidentRow({ incident, flash }: { incident: BoardIncident; flash: bool
       {/* Desktop grid */}
       <div className="hidden grid-cols-[64px_1.1fr_110px_1.3fr_120px_150px_12px] items-center gap-2 px-[18px] py-3.5 lg:grid">
         <div className="text-[13px] font-bold text-ink">{clockTime(incident.created_at)}</div>
-        <div className="flex items-center gap-2 text-[13px] text-ink">
+        <div className="flex flex-wrap items-center gap-1.5 text-[13px] text-ink">
           {incident.category}
           {incident.restricted && <span title="Medical — restricted">🔒</span>}
+          {overdue !== null && <ReviewDue minutes={overdue} />}
         </div>
         <div>
           <SeverityBadge severity={incident.severity} />
@@ -89,6 +108,7 @@ function IncidentRow({ incident, flash }: { incident: BoardIncident; flash: bool
           <span className="text-[11px] text-faint">{incident.ref}</span>
           <SeverityBadge severity={incident.severity} small />
           <StatusPill status={incident.status} />
+          {overdue !== null && <ReviewDue minutes={overdue} />}
         </div>
         <div className="text-[13px] font-bold text-ink">
           {incident.category}
@@ -119,6 +139,14 @@ export default function Dashboard() {
   const { profile } = useAuth()
   const [sort, setSort] = useState<SortKey>('Time')
   const [commandLog, setCommandLog] = useState<TimelineEntry[]>([])
+  const [, setTick] = useState(0)
+
+  // Review-due is derived from wall clock, so re-render each minute even when
+  // nothing on the board has changed.
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 60_000)
+    return () => clearInterval(id)
+  }, [])
 
   // Command log: the escalation-relevant entries across the whole event.
   useEffect(() => {
@@ -155,6 +183,7 @@ export default function Dashboard() {
       critical: bySeverity('Critical'),
       major: bySeverity('Major'),
       resourced: open.filter((i) => (i.resources_deployed ?? '').trim().length > 0).length,
+      reviewDue: open.filter((i) => reviewOverdueBy(i) !== null).length,
       highest: open.length > 0 ? highest : '—',
     }
   }, [open])
@@ -288,11 +317,20 @@ export default function Dashboard() {
           valueColour={stats.major > 0 ? SEVERITY_COLOUR.Major : undefined}
         />
         <StatTile
-          label="RESOURCES DEPLOYED"
-          short="RES"
-          value={stats.resourced}
+          label="REVIEW DUE"
+          short="DUE"
+          value={stats.reviewDue}
           accent="#333333"
+          valueColour={stats.reviewDue > 0 ? '#333333' : undefined}
         />
+        <div className="hidden sm:block">
+          <StatTile
+            label="RESOURCES DEPLOYED"
+            short="RES"
+            value={stats.resourced}
+            accent="#333333"
+          />
+        </div>
         {/* One slim line on a phone; a tile alongside the rest on desktop. */}
         <div className="col-span-4 flex items-baseline gap-2 rounded-[3px] bg-ink px-3 py-2 sm:px-4 sm:py-3.5 md:col-span-3 md:block xl:col-span-1">
           <div className="text-[10px] leading-tight font-bold tracking-[0.5px] whitespace-nowrap text-[#d8d8d8] sm:text-[11px]">

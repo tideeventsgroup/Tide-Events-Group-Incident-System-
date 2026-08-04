@@ -34,6 +34,14 @@ function HistoryIcon() {
     </svg>
   )
 }
+function LogbookIcon() {
+  return (
+    <svg {...ICON} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H19v16H5.5A1.5 1.5 0 0 1 4 18.5z" />
+      <path d="M8 8h7M8 12h7M8 16h4" />
+    </svg>
+  )
+}
 function SettingsIcon() {
   return (
     <svg {...ICON} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
@@ -55,8 +63,9 @@ interface Tab {
 
 const TABS: Tab[] = [
   { to: '/control', label: 'Dashboard', short: 'Board', end: true, icon: BoardIcon },
-  { to: '/control/new', label: 'New Incident', short: 'Log', end: false, icon: LogIcon, writeOnly: true, primary: true },
-  { to: '/control/history', label: 'Incident History', short: 'History', end: false, icon: HistoryIcon },
+  { to: '/control/log', label: 'Event Log', short: 'Log', end: false, icon: LogbookIcon },
+  { to: '/control/new', label: 'New Incident', short: 'New', end: false, icon: LogIcon, writeOnly: true, primary: true },
+  { to: '/control/history', label: 'History', short: 'History', end: false, icon: HistoryIcon },
   { to: '/control/settings', label: 'Event Settings', short: 'Event', end: false, icon: SettingsIcon },
 ]
 
@@ -137,6 +146,16 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
           {/* Desktop tabs sit in the bar; small screens get the bottom bar. */}
           <nav className="hidden items-center gap-1 lg:flex">
+            <NavLink
+              to="/control/methane"
+              className={({ isActive }) =>
+                `rounded-full px-3.5 py-2 text-[12.5px] font-bold no-underline transition-colors ${
+                  isActive ? 'bg-alert text-white' : 'text-[#c8c8c8] hover:bg-[#444] hover:text-white'
+                }`
+              }
+            >
+              M/ETHANE
+            </NavLink>
             {tabs.map((tab) => (
               <NavLink
                 key={tab.to}
@@ -194,8 +213,14 @@ export default function AppShell({ children }: { children: ReactNode }) {
                     {pending.length > 0 && ` · ${pending.length} queued`}
                   </div>
                   <Link
+                    to="/control/methane"
+                    className="mt-3 block rounded-[4px] border border-alert px-3 py-2.5 text-center text-[12px] font-bold text-alert no-underline lg:hidden"
+                  >
+                    M/ETHANE report
+                  </Link>
+                  <Link
                     to="/"
-                    className="mt-3 block rounded-[4px] border border-line px-3 py-2.5 text-center text-[12px] font-bold text-muted no-underline hover:bg-wash"
+                    className="mt-2 block rounded-[4px] border border-line px-3 py-2.5 text-center text-[12px] font-bold text-muted no-underline hover:bg-wash"
                   >
                     ← Tide public site
                   </Link>

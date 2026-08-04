@@ -8,6 +8,8 @@ import NewIncident from './pages/NewIncident'
 import IncidentDetail from './pages/IncidentDetail'
 import History from './pages/History'
 import EventSettings from './pages/EventSettings'
+import Methane from './pages/Methane'
+import EventLog from './pages/EventLog'
 import PwaStatus from './components/PwaStatus'
 import Home from './site/Home'
 import Services from './site/Services'
@@ -48,6 +50,8 @@ function ControlRoom() {
           <Route index element={<Dashboard />} />
           <Route path="new" element={<NewIncident />} />
           <Route path="incident/:id" element={<IncidentDetail />} />
+          <Route path="log" element={<EventLog />} />
+          <Route path="methane" element={<Methane />} />
           <Route path="history" element={<History />} />
           <Route path="settings" element={<EventSettings />} />
           <Route path="*" element={<Navigate to="/control" replace />} />

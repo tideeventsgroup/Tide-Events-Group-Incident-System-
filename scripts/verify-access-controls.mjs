@@ -112,11 +112,15 @@ check(
   miReadBackErr?.message?.slice(0, 60),
 )
 
+// Newest first: the demo board also carries a medical incident, so pick the
+// one this run just created rather than whichever the planner returns first.
 const { data: medRows } = await med.client
   .from('incidents')
   .select('id, description')
   .eq('category', 'Medical')
   .eq('event_id', ev.id)
+  .order('created_at', { ascending: false })
+  .limit(1)
 const medId = medRows?.[0]?.id
 check(
   'Medical Lead reads full medical description',
