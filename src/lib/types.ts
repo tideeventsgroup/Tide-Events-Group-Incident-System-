@@ -181,14 +181,21 @@ export const REVIEW_DUE_MINUTES: Record<Severity, number> = {
   Minor: 120,
 }
 
-/** Minutes since the last timeline entry, if that now exceeds the threshold. */
-export function reviewOverdueBy(incident: {
-  severity: Severity
-  status: Status
-  last_update_at: string
-}): number | null {
+/**
+ * Minutes since the last timeline entry, if that now exceeds the threshold.
+ * The clock is injectable so a component driving a ticking board can pass the
+ * same instant to every row, and so memoised work can depend on it honestly.
+ */
+export function reviewOverdueBy(
+  incident: {
+    severity: Severity
+    status: Status
+    last_update_at: string
+  },
+  now: number = Date.now(),
+): number | null {
   if (incident.status === 'Resolved') return null
-  const mins = Math.floor((Date.now() - new Date(incident.last_update_at).getTime()) / 60_000)
+  const mins = Math.floor((now - new Date(incident.last_update_at).getTime()) / 60_000)
   return mins >= REVIEW_DUE_MINUTES[incident.severity] ? mins : null
 }
 

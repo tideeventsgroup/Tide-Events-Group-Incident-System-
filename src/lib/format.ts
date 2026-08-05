@@ -69,6 +69,19 @@ export function elapsed(from: string, now: number = Date.now()): string {
   return `${Math.floor(hrs / 24)}d ${hrs % 24}h`
 }
 
+/**
+ * Running clock since an incident was raised, for the console queue. Dispatch
+ * screens count up rather than describing — an operator reads `01:47:12` off a
+ * row and knows the shape of it without doing arithmetic.
+ */
+export function elapsedClock(from: string, now: number = Date.now()): string {
+  const secs = Math.max(0, Math.floor((now - new Date(from).getTime()) / 1000))
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const h = Math.floor(secs / 3600)
+  if (h >= 24) return `${Math.floor(h / 24)}d ${pad(h % 24)}h`
+  return `${pad(h)}:${pad(Math.floor((secs % 3600) / 60))}:${pad(secs % 60)}`
+}
+
 export function retentionUntil(endDate: string | null, months: number): string | null {
   if (!endDate) return null
   const d = new Date(`${endDate}T12:00:00Z`)

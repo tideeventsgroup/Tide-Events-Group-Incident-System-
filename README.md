@@ -158,9 +158,35 @@ treatment, typed and filterable, grouped by day.
 ### Review due
 
 An open incident with no timeline entry for longer than its severity allows is flagged on
-the board and counted in the stat strip. Thresholds are 15 minutes for Critical, 30 for
-Major, 60 for Moderate, 120 for Minor. Control rooms lose incidents to silence, not to
-disagreement.
+the board and counted in the tote. Thresholds are 15 minutes for Critical, 30 for Major, 60
+for Moderate, 120 for Minor. Control rooms lose incidents to silence, not to disagreement.
+
+### The board is a console
+
+`/control` is laid out as a dispatch screen rather than a dashboard: an alert strip, a tote
+board of counts, a priority-ordered call queue filling the screen, and a rail carrying the
+selected call, sector status and the command log.
+
+- **Priority, not just severity.** Critical/Major/Moderate/Minor also read as **P1–P4**,
+  because that is what goes over the radio. The queue's default order is dispatch order —
+  highest priority first, then longest waiting.
+- **Running clocks.** Each live call counts up rather than showing the time it came in. The
+  clock brightens at three quarters of that incident's review threshold and turns crimson
+  once it passes, so an incident going quiet is visible before anyone asks.
+- **Preview, don't navigate.** Selecting a call opens it in the rail. A control room that
+  loses the board to read one record has lost the board. Opening the full record is a
+  deliberate second action.
+- **Keyboard first.** `↑`/`↓` (or `j`/`k`) walk the queue, `↵` opens the selected call, `/`
+  jumps to the filter — and `↓` from the filter box steps straight into the results — and
+  `N` starts a new incident. A focused chip keeps its own `↵`.
+- **No resource means no resource.** The flag and its count exclude incidents whose
+  deployment is masked by medical restriction, because "restricted" and "nothing sent" are
+  different facts and a board must not conflate them.
+
+The console is dark and the rest of the tool is not. That split is deliberate: the board is
+the screen that stays open all night, so it throws less light at the operators and only the
+things worth looking at are bright. Forms, records and exports are paperwork — read up
+close, and printed — so they stay on the light surface.
 
 ---
 
@@ -250,9 +276,17 @@ Arial throughout. Primary Black `#333333`, Tide Teal `#25BEC8`, White, Light Acc
 Severity uses a separate neutral-to-crimson escalation scale so it never competes with the
 brand accent, and contains no orange:
 
-| Minor | Moderate | Major | Critical |
-| --- | --- | --- | --- |
-| `#6B7280` | `#8C5A66` | `#A31B32` | `#C41E3A` (pulses) |
+| | Minor | Moderate | Major | Critical |
+| --- | --- | --- | --- | --- |
+| Light surface | `#6B7280` | `#8C5A66` | `#A31B32` | `#C41E3A` (pulses) |
+| Console | `#9AA3B2` | `#C08A97` | `#E0455E` | `#FF5069` (pulses) |
+
+The console keeps the same hues and raises luminance, so each step still clears contrast
+against a near-black panel.
+
+Numerals on the console are Arial with `tabular-nums` rather than a monospace face. Digits
+line up column to column, which is the point of a dispatch readout, without introducing a
+second typeface.
 
 ## GDPR & retention
 

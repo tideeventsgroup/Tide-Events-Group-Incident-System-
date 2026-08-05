@@ -183,11 +183,19 @@ a:focus-visible,
 
 .app-main {
   flex: 1;
+  /* The console paints its own dark surface, so it has to reach the bottom of
+     the viewport on a short board rather than leaving a band of shell behind. */
+  display: flex;
+  flex-direction: column;
   -webkit-overflow-scrolling: touch;
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
   /* Clear the bottom bar so the last row is never trapped under it. */
   padding-bottom: calc(76px + env(safe-area-inset-bottom));
+}
+
+.app-main > * {
+  flex: 1 0 auto;
 }
 
 @media (min-width: 1024px) {
@@ -287,6 +295,466 @@ a:focus-visible,
   .tab-bar {
     display: none;
   }
+}
+
+/* =====================================================================
+   Command console — the incident board.
+
+   The board is the screen that stays open all night on the control room
+   wall, so it is dark: less light thrown at the operators, and the only
+   bright things on it are the things that need looking at. The rest of
+   the tool — forms, records, exports — stays on the light surface,
+   because that is paperwork and it gets read up close and printed.
+
+   Everything here is Arial with tabular figures rather than a monospace
+   face. Digits still line up column to column, which is the whole point
+   of a dispatch readout, without breaking the brand's one typeface.
+   ===================================================================== */
+
+.cc {
+  --cc-base: #151515;
+  --cc-panel: #1e1e1e;
+  --cc-raise: #272727;
+  --cc-line: #363636;
+  --cc-line-soft: #2b2b2b;
+  --cc-text: #ececec;
+  --cc-dim: #9a9a9a;
+  --cc-faint: #6e6e6e;
+
+  min-height: 100%;
+  background: var(--cc-base);
+  color: var(--cc-text);
+  padding: 0 0 24px;
+}
+
+/* app-main reserves room for the bottom tab bar, which would leave a band of
+   light shell under the console. Absorb the reservation and re-spend it as
+   the console's own padding, so the dark surface runs to the bar. */
+@media (max-width: 1023px) {
+  .cc {
+    margin-bottom: calc(-76px - env(safe-area-inset-bottom));
+    padding-bottom: calc(90px + env(safe-area-inset-bottom));
+  }
+}
+
+.cc-num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.4px;
+}
+
+.cc-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--cc-faint);
+  text-transform: uppercase;
+}
+
+/* --------------------------------------------------------- alert strip */
+
+.cc-alert {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 9px 16px;
+  background: #2a0d13;
+  border-bottom: 1px solid #5c1c27;
+  border-left: 4px solid var(--color-sev-critical);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: #ff8a99;
+}
+
+/* ---------------------------------------------------------- tote board */
+
+.cc-tote {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--cc-line-soft);
+  border-bottom: 1px solid var(--cc-line);
+}
+
+@media (min-width: 640px) {
+  .cc-tote {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
+.cc-tote-cell {
+  background: var(--cc-panel);
+  padding: 10px 14px 11px;
+  min-width: 0;
+}
+
+.cc-tote-value {
+  margin-top: 2px;
+  font-size: 27px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--cc-text);
+}
+
+.cc-tote-value.is-quiet {
+  color: #4f4f4f;
+}
+
+/* Wide cell: text rather than a numeral, so it sizes to read not to shout. */
+.cc-tote-text {
+  margin-top: 3px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--color-teal);
+}
+
+/* -------------------------------------------------------------- panels */
+
+.cc-body {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  padding: 14px 14px 0;
+  align-items: start;
+}
+
+@media (min-width: 1280px) {
+  .cc-body {
+    grid-template-columns: minmax(0, 1fr) 372px;
+    padding: 14px 18px 0;
+    align-items: stretch;
+  }
+
+  /* The queue is the board — it should run the full height of the column
+     rather than stopping in mid-air on a quiet night. The rail opts out of
+     the stretch and pins itself, so scrolling a long queue keeps the
+     selected call, the sector board and the log in view. */
+  .cc-body > .cc-panel {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cc-queue-body {
+    flex: 1 1 auto;
+  }
+
+  .cc-rail {
+    align-self: start;
+    position: sticky;
+    top: 14px;
+  }
+}
+
+.cc-panel {
+  border: 1px solid var(--cc-line);
+  background: var(--cc-panel);
+  min-width: 0;
+}
+
+.cc-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 14px;
+  background: var(--cc-raise);
+  border-bottom: 1px solid var(--cc-line);
+}
+
+.cc-panel-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--cc-text);
+  margin: 0;
+}
+
+.cc-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------- filter bar */
+
+.cc-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--cc-line-soft);
+}
+
+.cc-search {
+  flex: 1 1 190px;
+  min-width: 0;
+}
+
+/* Native input styling is set globally for the light surface; the console
+   needs its own, and this rule is unlayered so it wins without !important. */
+.cc-search input[type='text'] {
+  width: 100%;
+  padding: 7px 10px;
+  background: var(--cc-base);
+  border: 1px solid var(--cc-line);
+  border-radius: 2px;
+  color: var(--cc-text);
+  font-size: 12.5px;
+}
+
+.cc-search input[type='text']::placeholder {
+  color: var(--cc-faint);
+}
+
+.cc-chip {
+  padding: 6px 10px;
+  border: 1px solid var(--cc-line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--cc-dim);
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.cc-chip:hover {
+  color: var(--cc-text);
+  border-color: #4a4a4a;
+}
+
+.cc-chip.is-on {
+  background: var(--color-teal);
+  border-color: var(--color-teal);
+  color: #10343a;
+}
+
+.cc-chip.is-alarm.is-on {
+  background: var(--color-sev-critical);
+  border-color: var(--color-sev-critical);
+  color: #fff;
+}
+
+/* ------------------------------------------------------------- queue */
+
+.cc-cols,
+.cc-row-wide {
+  display: none;
+}
+
+.cc-row-narrow {
+  display: block;
+}
+
+@media (min-width: 900px) {
+  .cc-cols,
+  .cc-row-wide {
+    display: grid;
+    grid-template-columns:
+      40px 78px 92px minmax(130px, 1.4fr)
+      minmax(104px, 1fr) 96px 98px;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .cc-row-narrow {
+    display: none;
+  }
+}
+
+.cc-cols {
+  padding: 7px 14px;
+  background: var(--cc-raise);
+  border-bottom: 1px solid var(--cc-line);
+}
+
+.cc-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--cc-line-soft);
+  border-left: 3px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cc-row-wide,
+.cc-row-narrow {
+  padding: 9px 14px 9px 11px;
+}
+
+.cc-row:hover {
+  background: #232323;
+}
+
+.cc-row.is-selected {
+  background: #202b2c;
+  border-left-color: var(--color-teal);
+}
+
+.cc-row.is-resolved {
+  opacity: 0.5;
+}
+
+.cc-row:focus-visible {
+  outline: 2px solid var(--color-teal);
+  outline-offset: -2px;
+}
+
+/* Priority block — the one element on the row you can read across a room. */
+.cc-pri {
+  display: inline-block;
+  min-width: 30px;
+  padding: 3px 0;
+  border-radius: 2px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-align: center;
+  color: #fff;
+}
+
+.cc-clock {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--cc-dim);
+}
+
+.cc-clock.is-near {
+  color: #ffffff;
+}
+
+.cc-clock.is-over {
+  color: var(--color-sev-critical);
+}
+
+.cc-flag {
+  display: inline-block;
+  padding: 2px 5px;
+  border-radius: 2px;
+  border: 1px solid var(--cc-line);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: var(--cc-dim);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.cc-flag.is-alarm {
+  border-color: var(--color-sev-critical);
+  background: #2a0d13;
+  color: #ff8a99;
+}
+
+/* -------------------------------------------------------- sector board */
+
+.cc-sectors {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--cc-line-soft);
+}
+
+@media (min-width: 640px) and (max-width: 1279px) {
+  .cc-sectors {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.cc-sector {
+  background: var(--cc-panel);
+  padding: 9px 11px;
+  border-left: 3px solid var(--color-ok);
+  min-width: 0;
+}
+
+.cc-sector-name {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--cc-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cc-sector-state {
+  margin-top: 1px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: var(--color-ok);
+}
+
+/* --------------------------------------------------------- command log */
+
+.cc-log-row {
+  display: flex;
+  gap: 9px;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--cc-line-soft);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #cfcfcf;
+}
+
+.cc-log-row:last-child {
+  border-bottom: 0;
+}
+
+.cc-log-time {
+  flex: none;
+  font-weight: 700;
+  color: var(--color-teal);
+}
+
+/* A row that just changed. The light-surface flash washes to near-white,
+   which on the console would read as a fault rather than an update. */
+@keyframes cc-flash {
+  from {
+    background-color: #144a4f;
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.cc-flash {
+  animation: cc-flash 1.8s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cc-flash {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------ keyboard */
+
+.cc-key {
+  display: inline-block;
+  min-width: 17px;
+  padding: 1px 4px;
+  border: 1px solid var(--cc-line);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  background: var(--cc-raise);
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--cc-dim);
 }
 
 /* Installed, the app should not feel like a page: no text selection on
