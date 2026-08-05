@@ -87,6 +87,13 @@ export interface BoardIncident {
   /** Raised while the control room had no connection, and synced later. */
   logged_offline: boolean
   synced_at: string | null
+  /** Response milestones. Set once, then frozen — they are the response times. */
+  acknowledged_at: string | null
+  on_scene_at: string | null
+  /** Dispatch state, rolled up from the units committed to this incident. */
+  assigned_count: number
+  assigned_units: string | null
+  response_state: ResourceState | null
   restricted: boolean
   description: string | null
   reported_by: string | null
@@ -98,6 +105,56 @@ export interface BoardIncident {
   event_name: string
   event_client: string
   event_locked: boolean
+}
+
+export const RESOURCE_KINDS = [
+  'Medical',
+  'Security',
+  'Steward',
+  'Traffic',
+  'Welfare',
+  'Command',
+  'Contractor',
+  'Other',
+] as const
+
+/**
+ * The unit lifecycle, in event control's language. `Assigned` is dispatch's
+ * "dispatched"; `Clearing` is a unit finishing up but not yet free. Ordered
+ * as a unit moves through it, so the array index is the progression.
+ */
+export const RESOURCE_STATES = [
+  'Available',
+  'Assigned',
+  'En route',
+  'On scene',
+  'Clearing',
+  'Off duty',
+] as const
+
+export type ResourceKind = (typeof RESOURCE_KINDS)[number]
+export type ResourceState = (typeof RESOURCE_STATES)[number]
+
+/** States in which a unit is committed to an incident. */
+export const COMMITTED_STATES: ResourceState[] = ['Assigned', 'En route', 'On scene', 'Clearing']
+
+export function isCommitted(state: ResourceState): boolean {
+  return COMMITTED_STATES.includes(state)
+}
+
+/** A deployable unit — a team, a vehicle, a contractor on site. */
+export interface ResourceUnit {
+  id: string
+  event_id: string
+  callsign: string
+  name: string
+  kind: ResourceKind
+  state: ResourceState
+  assigned_incident_id: string | null
+  state_changed_at: string
+  notes: string | null
+  created_at: string
+  created_by: string | null
 }
 
 export type EntryType =

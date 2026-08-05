@@ -10,6 +10,8 @@ import {
   COMMAND_SHORT,
   OPEN_STATUSES,
   PRIORITY,
+  RESOURCE_STATE_COLOUR,
+  RESOURCE_STATE_SHORT,
   SEVERITY_COLOUR_DARK,
   SEVERITY_RANK,
   SEVERITY_TINT_DARK,
@@ -17,38 +19,56 @@ import {
 } from '../lib/style'
 import {
   canWrite,
+  isCommitted,
+  RESOURCE_STATES,
   REVIEW_DUE_MINUTES,
   reviewOverdueBy,
   type BoardIncident,
+  type ResourceState,
+  type ResourceUnit,
   type Severity,
   type TimelineEntry,
 } from '../lib/types'
 
 /**
- * The incident board, as a command console.
+ * The incident board, as a dispatch console.
  *
- * Laid out the way a dispatch screen is: a tote board of counts across the
- * top, a priority-ordered queue of live calls filling the screen, and a rail
- * carrying the selected call, sector status and the command log. One screen —
- * selecting a call previews it in place rather than navigating away, because
- * a control room that loses the board to open a record has lost the board.
+ * Every system built for this job — police and fire CAD, and the event
+ * products (Momentus WeTrack, Controlled Events, Halo) — puts two boards side
+ * by side, not one: the calls, and the units. The dispatcher's loop is "which
+ * call has nobody on it, and who is free to send", so the layout answers that
+ * question without a click: a status line, a tote board of counts, a
+ * priority-ordered call queue, and a rail carrying the selected call, the unit
+ * status monitor, sector status and the command log.
  *
- * Every call carries a running clock instead of a timestamp. Dispatch screens
- * count up: an operator reads the row and knows how long it has been sitting,
- * and the clock turns as the incident's review threshold approaches and again
- * when it passes.
+ * Selecting a call previews and dispatches it in place rather than navigating
+ * away, because a control room that loses the board to open a record has lost
+ * the board.
+ *
+ * Every live call carries a running clock instead of a timestamp. Dispatch
+ * screens count up: an operator reads the row and knows how long it has been
+ * sitting, and the clock turns as the incident's review threshold approaches
+ * and again when it passes.
  */
 
 type SortKey = 'PRI' | 'TIME' | 'ZONE'
-type Filter = 'all' | 'live' | 'p12' | 'due' | 'unresourced'
+type Filter = 'all' | 'live' | 'p12' | 'due' | 'unassigned'
 
 const FILTERS: { key: Filter; label: string; alarm?: boolean }[] = [
   { key: 'live', label: 'LIVE' },
   { key: 'p12', label: 'P1 · P2' },
+  { key: 'unassigned', label: 'UNASSIGNED', alarm: true },
   { key: 'due', label: 'REVIEW DUE', alarm: true },
-  { key: 'unresourced', label: 'NO RESOURCE' },
   { key: 'all', label: 'ALL' },
 ]
+
+/** What a committed unit can be moved to next, in the order a call runs. */
+const NEXT_STATE: Partial<Record<ResourceState, ResourceState[]>> = {
+  Assigned: ['En route', 'On scene'],
+  'En route': ['On scene'],
+  'On scene': ['Clearing'],
+  Clearing: [],
+}
 
 /* ------------------------------------------------------------------ hooks */
 
@@ -86,19 +106,19 @@ function reviewState(incident: BoardIncident, now: number): 'ok' | 'near' | 'ove
 }
 
 /**
- * Whether anything is deployed against a call — but "restricted" is a third
- * answer, not a synonym for "none". Resources on a medical incident are masked
- * for roles without clearance, and a board that rendered that as *nothing sent*
- * would be telling a Security Supervisor something untrue about a casualty.
+ * The free-text note about what was sent — kit, external services, mutual aid.
+ * "Restricted" is a third answer, not a synonym for "none": this field is
+ * masked on a medical incident for roles without clearance, and rendering that
+ * as *nothing sent* would tell a Security Supervisor something untrue about a
+ * casualty. Unit assignment, below, is dispatch information and is not masked.
  */
-function resourceState(i: BoardIncident): 'deployed' | 'none' | 'restricted' {
+function deploymentNote(i: BoardIncident): 'recorded' | 'none' | 'restricted' {
   if (i.restricted) return 'restricted'
-  return (i.resources_deployed ?? '').trim().length > 0 ? 'deployed' : 'none'
+  return (i.resources_deployed ?? '').trim().length > 0 ? 'recorded' : 'none'
 }
 
-/** An open call this viewer can see has nothing deployed against it. */
-const needsResource = (i: BoardIncident) =>
-  i.status !== 'Resolved' && resourceState(i) === 'none'
+/** An open call with no unit committed to it. The dispatcher's first question. */
+const isUnassigned = (i: BoardIncident) => i.status !== 'Resolved' && i.assigned_count === 0
 
 /* ------------------------------------------------------------ components */
 
@@ -143,10 +163,29 @@ function Flags({ incident, now }: { incident: BoardIncident; now: number }) {
           REVIEW {elapsed(incident.last_update_at, now)}
         </span>
       )}
-      {needsResource(incident) && <span className="cc-flag">NO RESOURCE</span>}
       {incident.logged_offline && <span className="cc-flag">OFFLINE</span>}
       {incident.follow_up_required && <span className="cc-flag">FOLLOW-UP</span>}
     </>
+  )
+}
+
+/** The dispatch cell: who is on this call, and how far along they are. */
+function Assignment({ incident }: { incident: BoardIncident }) {
+  if (incident.status === 'Resolved') return <span className="text-[#5e5e5e]">—</span>
+  if (incident.assigned_count === 0) {
+    return <span className="cc-flag is-alarm">UNASSIGNED</span>
+  }
+  const state = incident.response_state
+  return (
+    <span className="flex min-w-0 items-baseline gap-1.5">
+      <span
+        className="text-[9.5px] font-bold tracking-[0.7px]"
+        style={{ color: state ? RESOURCE_STATE_COLOUR[state] : undefined }}
+      >
+        {state ? RESOURCE_STATE_SHORT[state] : ''}
+      </span>
+      <span className="truncate text-[11.5px] text-[#c4c4c4]">{incident.assigned_units}</span>
+    </span>
   )
 }
 
@@ -197,6 +236,9 @@ function QueueRow({
           <Flags incident={incident} now={minute} />
         </span>
         <span className="truncate text-[12px] text-[#b4b4b4]">{incident.location}</span>
+        <span className="min-w-0">
+          <Assignment incident={incident} />
+        </span>
         <span>
           <Status status={incident.status} />
         </span>
@@ -222,6 +264,7 @@ function QueueRow({
           <span className="font-normal text-[#8f8f8f]"> · {incident.location}</span>
         </span>
         <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <Assignment incident={incident} />
           <span className="cc-flag">{COMMAND_SHORT[incident.command_level]}</span>
           <Flags incident={incident} now={minute} />
         </span>
@@ -259,8 +302,128 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
+/**
+ * Dispatch, in the preview. Committing a unit and moving it along is the loop
+ * the console exists for, so it happens on the board rather than two clicks
+ * away inside a record.
+ */
+function DispatchPanel({
+  incident,
+  units,
+  now,
+  writable,
+}: {
+  incident: BoardIncident
+  units: ResourceUnit[]
+  now: number
+  writable: boolean
+}) {
+  const { dispatch } = useLive()
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const committed = units.filter((u) => u.assigned_incident_id === incident.id)
+  const free = units.filter((u) => u.state === 'Available')
+
+  async function move(unit: ResourceUnit, state: ResourceState, incidentId: string | null) {
+    setBusy(unit.id)
+    setError(await dispatch(unit.id, state, incidentId))
+    setBusy(null)
+  }
+
+  return (
+    <div className="border-t border-[#2b2b2b] px-3.5 py-3">
+      <div className="cc-label">Units committed ({committed.length})</div>
+
+      {committed.length === 0 ? (
+        <p className="mt-1.5 text-[12px] text-[#8f8f8f]">
+          Nobody is on this call yet.
+        </p>
+      ) : (
+        <ul className="mt-1.5 flex flex-col gap-2">
+          {committed.map((u) => (
+            <li key={u.id} className="flex flex-wrap items-center gap-1.5">
+              <span
+                className="text-[9.5px] font-bold tracking-[0.8px]"
+                style={{ color: RESOURCE_STATE_COLOUR[u.state] }}
+              >
+                {RESOURCE_STATE_SHORT[u.state]}
+              </span>
+              <span className="text-[12.5px] font-bold text-[#ececec]">{u.callsign}</span>
+              <span className="cc-num text-[10.5px] text-[#6e6e6e]">
+                {elapsed(u.state_changed_at, now)}
+              </span>
+              {writable && (
+                <span className="ml-auto flex gap-1">
+                  {(NEXT_STATE[u.state] ?? []).map((next) => (
+                    <button
+                      key={next}
+                      type="button"
+                      className="cc-act is-go"
+                      disabled={busy === u.id}
+                      onClick={() => void move(u, next, incident.id)}
+                    >
+                      {RESOURCE_STATE_SHORT[next]}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="cc-act is-down"
+                    disabled={busy === u.id}
+                    title="Stand down and return to available"
+                    onClick={() => void move(u, 'Available', null)}
+                  >
+                    FREE
+                  </button>
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {writable && incident.status !== 'Resolved' && (
+        <div className="cc-dispatch mt-2.5">
+          <label>
+            <span className="sr-only">Dispatch a unit to {incident.ref}</span>
+            <select
+              value=""
+              disabled={free.length === 0 || busy !== null}
+              onChange={(e) => {
+                const unit = free.find((u) => u.id === e.target.value)
+                if (unit) void move(unit, 'Assigned', incident.id)
+              }}
+            >
+              <option value="">
+                {free.length === 0 ? 'No units available' : `Dispatch a unit… (${free.length} free)`}
+              </option>
+              {free.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.callsign} — {u.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+
+      {error && <p className="mt-2 text-[11px] font-bold text-[#ff8a99]">{error}</p>}
+    </div>
+  )
+}
+
 /** The selected call, previewed without leaving the board. */
-function CallPreview({ incident, now }: { incident: BoardIncident; now: number }) {
+function CallPreview({
+  incident,
+  units,
+  now,
+  writable,
+}: {
+  incident: BoardIncident
+  units: ResourceUnit[]
+  now: number
+  writable: boolean
+}) {
   const overdue = reviewOverdueBy(incident, now)
   return (
     <div>
@@ -295,13 +458,38 @@ function CallPreview({ incident, now }: { incident: BoardIncident; now: number }
           {elapsed(incident.last_update_at, now)} ago
           {overdue !== null && <span className="ml-1.5 cc-flag is-alarm">REVIEW DUE</span>}
         </Field>
+
+        {/* Response milestones — the times a debrief and a licensing review
+            will ask about. Frozen once set. */}
+        <Field label="Acknowledged">
+          {incident.acknowledged_at ? (
+            `${clockTime(incident.acknowledged_at)} · ${elapsed(
+              incident.created_at,
+              new Date(incident.acknowledged_at).getTime(),
+            )} after raising`
+          ) : (
+            <span className="cc-flag is-alarm">NOT ACKNOWLEDGED</span>
+          )}
+        </Field>
+        <Field label="First unit on scene">
+          {incident.on_scene_at ? (
+            `${clockTime(incident.on_scene_at)} · ${elapsed(
+              incident.created_at,
+              new Date(incident.on_scene_at).getTime(),
+            )} response`
+          ) : (
+            <span className="text-[#6e6e6e]">—</span>
+          )}
+        </Field>
       </div>
 
+      <DispatchPanel incident={incident} units={units} now={now} writable={writable} />
+
       <div className="flex flex-col gap-3 border-t border-[#2b2b2b] px-3.5 py-3">
-        <Field label="Resource deployed">
-          {resourceState(incident) === 'deployed' && incident.resources_deployed}
-          {resourceState(incident) === 'none' && <span className="cc-flag">NONE RECORDED</span>}
-          {resourceState(incident) === 'restricted' && (
+        <Field label="Deployment note">
+          {deploymentNote(incident) === 'recorded' && incident.resources_deployed}
+          {deploymentNote(incident) === 'none' && <span className="cc-flag">NONE RECORDED</span>}
+          {deploymentNote(incident) === 'restricted' && (
             <span className="text-[#8f8f8f]">🔒 Restricted with the medical detail.</span>
           )}
         </Field>
@@ -330,11 +518,106 @@ function CallPreview({ incident, now }: { incident: BoardIncident; now: number }
   )
 }
 
+/**
+ * The unit status monitor — the second board every dispatch system carries.
+ * Grouped by state in the order a unit moves through a call, so "who can I
+ * send" is the top of the list rather than a scan of the whole roster.
+ */
+function UnitMonitor({
+  units,
+  incidents,
+  now,
+  onPick,
+}: {
+  units: ResourceUnit[]
+  incidents: BoardIncident[]
+  now: number
+  onPick: (incidentId: string) => void
+}) {
+  const refFor = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const i of incidents) map.set(i.id, i.ref)
+    return map
+  }, [incidents])
+
+  const groups = RESOURCE_STATES.map((state) => ({
+    state,
+    list: units.filter((u) => u.state === state),
+  })).filter((g) => g.list.length > 0)
+
+  if (units.length === 0) {
+    return (
+      <p className="px-3.5 py-6 text-center text-[12px] leading-[1.6] text-[#6e6e6e]">
+        No units signed on for this event.
+        <span className="mt-1 block">Add the roster under Event Settings.</span>
+      </p>
+    )
+  }
+
+  return (
+    <div className="cc-scroll">
+      {groups.map(({ state, list }) => (
+        <div key={state}>
+          <div className="cc-unit-head">
+            <span
+              className="text-[9.5px] font-bold tracking-[0.9px]"
+              style={{ color: RESOURCE_STATE_COLOUR[state] }}
+            >
+              {state.toUpperCase()}
+            </span>
+            <span className="cc-label cc-num">{list.length}</span>
+          </div>
+          {list.map((u) => {
+            const ref = u.assigned_incident_id ? refFor.get(u.assigned_incident_id) : null
+            const body = (
+              <>
+                <span className="cc-unit-line">
+                  <span className="cc-unit-call">{u.callsign}</span>
+                  {ref && <span className="cc-num text-[11px] text-[#c4c4c4]">{ref}</span>}
+                  <span
+                    className="cc-unit-state cc-num"
+                    style={{ color: RESOURCE_STATE_COLOUR[u.state] }}
+                  >
+                    {RESOURCE_STATE_SHORT[u.state]} {elapsed(u.state_changed_at, now)}
+                  </span>
+                </span>
+                <span className="cc-unit-sub mt-0.5 block">
+                  {u.kind} · {u.name}
+                </span>
+              </>
+            )
+            return isCommitted(u.state) && u.assigned_incident_id ? (
+              <button
+                key={u.id}
+                type="button"
+                className="cc-unit"
+                style={{ borderLeftColor: RESOURCE_STATE_COLOUR[u.state] }}
+                onClick={() => onPick(u.assigned_incident_id!)}
+              >
+                {body}
+              </button>
+            ) : (
+              <div
+                key={u.id}
+                className="cc-unit"
+                style={{ borderLeftColor: RESOURCE_STATE_COLOUR[u.state], cursor: 'default' }}
+              >
+                {body}
+              </div>
+            )
+          })}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /* ------------------------------------------------------------------ page */
 
 export default function Dashboard() {
   const {
     incidents,
+    units,
     activeEvent,
     activeEventId,
     recentlyChanged,
@@ -399,11 +682,13 @@ export default function Dashboard() {
       open: open.length,
       critical: bySeverity('Critical'),
       major: bySeverity('Major'),
-      unresourced: open.filter(needsResource).length,
+      unassigned: open.filter(isUnassigned).length,
       reviewDue: open.filter((i) => reviewOverdueBy(i, minute) !== null).length,
       highest: open.length > 0 ? highest : 'Ground Team (L1)',
+      committed: units.filter((u) => isCommitted(u.state)).length,
+      onDuty: units.filter((u) => u.state !== 'Off duty').length,
     }
-  }, [open, minute])
+  }, [open, minute, units])
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -415,8 +700,8 @@ export default function Dashboard() {
           return i.status !== 'Resolved' && SEVERITY_RANK[i.severity] >= 3
         case 'due':
           return reviewOverdueBy(i, minute) !== null
-        case 'unresourced':
-          return needsResource(i)
+        case 'unassigned':
+          return isUnassigned(i)
         default:
           return true
       }
@@ -565,23 +850,37 @@ export default function Dashboard() {
 
   const pendingHere = pending.filter((p) => p.event_id === activeEvent.id)
   const escalated = COMMAND_RANK[stats.highest] >= 3
-  const alarm = stats.critical > 0 || escalated
+  const alarm = stats.critical > 0 || escalated || stats.unassigned > 0
 
   return (
     <div className="cc">
-      {/* ------------------------------------------------------ alert strip */}
-      {alarm && (
-        <div className="cc-alert" role="status">
-          <span className="tide-pulse">●</span>
-          {stats.critical > 0 && (
-            <span>
-              P1 CRITICAL — {stats.critical} OPEN
-            </span>
-          )}
-          {escalated && <span>{stats.highest.toUpperCase()} ENGAGED</span>}
-          {stats.reviewDue > 0 && <span>{stats.reviewDue} AWAITING REVIEW</span>}
-        </div>
-      )}
+      {/* -------------------------------------------------------- status line */}
+      <div className={`cc-status ${alarm ? 'is-alarm' : ''}`} role="status">
+        {alarm && <span className="tide-pulse cc-status-alarm">●</span>}
+        <span>
+          <span className="cc-status-key">EVENT </span>
+          {activeEvent.status.toUpperCase()} · DAY {activeEvent.active_day}
+        </span>
+        <span>
+          <span className="cc-status-key">COMMAND </span>
+          {stats.open > 0 ? stats.highest.toUpperCase() : 'STANDBY'}
+        </span>
+        <span>
+          <span className="cc-status-key">UNITS </span>
+          {stats.committed}/{stats.onDuty} COMMITTED
+        </span>
+        <span className="cc-status-sep" />
+        {stats.critical > 0 && (
+          <span className="cc-status-alarm">P1 CRITICAL — {stats.critical} OPEN</span>
+        )}
+        {stats.unassigned > 0 && (
+          <span className="cc-status-alarm">{stats.unassigned} UNASSIGNED</span>
+        )}
+        {stats.reviewDue > 0 && (
+          <span className="cc-status-alarm">{stats.reviewDue} AWAITING REVIEW</span>
+        )}
+        {!alarm && <span>ALL CALLS RESOURCED</span>}
+      </div>
 
       {/* ------------------------------------------------------- tote board */}
       <div className="cc-tote">
@@ -610,6 +909,15 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="cc-tote-cell">
+          <div className="cc-label">Unassigned</div>
+          <div
+            className={`cc-tote-value cc-num ${stats.unassigned === 0 ? 'is-quiet' : ''}`}
+            style={stats.unassigned > 0 ? { color: SEVERITY_COLOUR_DARK.Critical } : undefined}
+          >
+            {stats.unassigned}
+          </div>
+        </div>
+        <div className="cc-tote-cell">
           <div className="cc-label">Review due</div>
           <div
             className={`cc-tote-value cc-num ${stats.reviewDue === 0 ? 'is-quiet' : ''}`}
@@ -619,14 +927,18 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="cc-tote-cell">
-          <div className="cc-label">No resource</div>
-          <div className={`cc-tote-value cc-num ${stats.unresourced === 0 ? 'is-quiet' : ''}`}>
-            {stats.unresourced}
+          <div className="cc-label">Units free</div>
+          <div
+            className={`cc-tote-value cc-num ${stats.onDuty === 0 ? 'is-quiet' : ''}`}
+            style={
+              stats.onDuty > 0 && stats.onDuty - stats.committed === 0
+                ? { color: SEVERITY_COLOUR_DARK.Critical }
+                : undefined
+            }
+          >
+            {stats.onDuty - stats.committed}
+            <span className="text-[15px] text-[#5e5e5e]">/{stats.onDuty}</span>
           </div>
-        </div>
-        <div className="cc-tote-cell">
-          <div className="cc-label">Command engaged</div>
-          <div className="cc-tote-text">{stats.open > 0 ? stats.highest : 'Standby'}</div>
         </div>
       </div>
 
@@ -758,6 +1070,7 @@ export default function Dashboard() {
             <span className="cc-label">Ref</span>
             <span className="cc-label">Category</span>
             <span className="cc-label">Sector</span>
+            <span className="cc-label">Assigned</span>
             <span className="cc-label">Status</span>
             <span className="cc-label">Command</span>
           </div>
@@ -839,7 +1152,12 @@ export default function Dashboard() {
           {wide && (
             <Panel title={selected ? `Selected call — ${selected.ref}` : 'Selected call'}>
               {selected ? (
-                <CallPreview incident={selected} now={now} />
+                <CallPreview
+                  incident={selected}
+                  units={units}
+                  now={now}
+                  writable={write && !activeEvent.locked}
+                />
               ) : (
                 <p className="px-3.5 py-8 text-center text-[12px] leading-[1.6] text-[#6e6e6e]">
                   Select a call to preview it here without leaving the board.
@@ -851,6 +1169,25 @@ export default function Dashboard() {
               )}
             </Panel>
           )}
+
+          <Panel
+            title="Unit status"
+            action={
+              <span className="cc-label cc-num">
+                {stats.onDuty - stats.committed} free · {stats.committed} committed
+              </span>
+            }
+          >
+            <UnitMonitor
+              units={units}
+              incidents={incidents}
+              now={now}
+              onPick={(id) => {
+                if (wide) setSelectedId(id)
+                else openRecord(id)
+              }}
+            />
+          </Panel>
 
           <Panel
             title="Sector status"
@@ -898,7 +1235,7 @@ export default function Dashboard() {
                 No command-level actions recorded yet.
               </p>
             ) : (
-              <div>
+              <div className="cc-scroll">
                 {commandLog.map((entry) => (
                   <div key={entry.id} className="cc-log-row">
                     <span className="cc-log-time cc-num">{clockTime(entry.at)}</span>

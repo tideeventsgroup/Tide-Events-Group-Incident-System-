@@ -78,6 +78,7 @@ not in the interface.
 | `event_access` | Which events a Client is linked to. Tide staff are not listed; they see everything |
 | `methane_reports` | Append-only M/ETHANE snapshots, per JESIP |
 | `event_log` | The radio loggist's running log — traffic that is not an incident |
+| `resources` | The deployable units for an event — callsign, type, live state, and the call they are committed to |
 | `live_pings` | Content-free realtime signalling (see below) |
 
 Two views sit in front of the tables and are what the app actually reads:
@@ -104,12 +105,12 @@ Two enums follow Tide's operating model rather than the generic naming:
 
 ## Roles
 
-| Role | Log & update | Close & sign off | Medical detail | Event config | Audit log | Events visible |
-| --- | --- | --- | --- | --- | --- | --- |
-| Incident Commander | ✅ | ✅ | ✅ | ✅ | ✅ | all |
-| Security Supervisor | ✅ | — | — | — | — | all |
-| Medical Lead | ✅ | ✅ | ✅ | — | — | all |
-| Client | — | — | ✅ | — | — | **only theirs** |
+| Role | Log & update | Dispatch units | Close & sign off | Medical detail | Event config | Audit log | Events visible |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Incident Commander | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | all |
+| Security Supervisor | ✅ | ✅ | — | — | — | — | all |
+| Medical Lead | ✅ | ✅ | ✅ | ✅ | — | — | all |
+| Client | — | — | — | ✅ | — | — | **only theirs** |
 
 The **Incident Commander** owns the incident, so they see all of it and are the only role
 that can change event configuration, assign roles, or read the audit log and website
@@ -161,11 +162,56 @@ An open incident with no timeline entry for longer than its severity allows is f
 the board and counted in the tote. Thresholds are 15 minutes for Critical, 30 for Major, 60
 for Moderate, 120 for Minor. Control rooms lose incidents to silence, not to disagreement.
 
+### Units, assignment and response times
+
+Every system built for this job puts **two** boards side by side, not one: the calls, and
+the units. It is the same shape in police and fire CAD ([unit status
+monitor](https://en.wikipedia.org/wiki/Computer-aided_dispatch), [PulsePoint's dispatched →
+en route → on scene → cleared
+lifecycle](https://www.pulsepoint.org/unit-status-legend)) and in the event products —
+[Momentus WeTrack](https://gomomentus.com/incident-management-software) ("log issues, assign
+owners, track progress"), [Controlled
+Events](https://controlledevents.com/the-features-of-effective-incident-management/), and
+[Halo](https://www.halosolutions.com/incident-management-system-buying-guide/), whose live
+operational picture is defined as "incident status, priorities, **ownership**, and
+location". A dispatcher's loop is *which call has nobody on it, and who is free to send*.
+
+So an event has a roster of **units** — teams, vehicles, contractors — each with a callsign,
+a type and a live state:
+
+`Available → Assigned → En route → On scene → Clearing`, plus `Off duty`.
+
+Many units may be committed to one call, which is how a real response runs. The board
+answers both halves of the loop at a glance: an **UNASSIGNED** flag and count on the call
+side, a unit status monitor grouped by state on the other. Dispatch happens on the board
+itself — select a call, pick a free unit, move it along — because two clicks into a record
+is not where a dispatcher works.
+
+A database constraint keeps the two fields honest: a committed unit has a call, a free unit
+does not, so the counts cannot drift. Every assignment and state change is written to that
+incident's timeline **by the database**, with definer rights, so a Security Supervisor can
+commit a unit to a medical incident they are not permitted to read back.
+
+Two response milestones come out of it and are frozen once set, because they are what a
+debrief and a licensing review will ask about:
+
+- **Acknowledged** — when control took ownership, set by the first unit committed.
+- **First unit on scene** — set when any assigned unit reports on scene.
+
+Unit callsigns are **not** medical-restricted. Which team is committed to a call is dispatch
+information, not clinical information, and a control room where one role cannot see that a
+medic is already en route is a worse control room. The free-text `resources_deployed` note —
+kit, external services, mutual aid — stays restricted with the rest of the medical detail.
+
+Signing a unit on or off is a dispatcher's action rather than a configuration change, so
+every role that can work an incident can do it. Units are never deleted; one that has been
+committed to an incident is part of that incident's record, so it goes Off duty instead.
+
 ### The board is a console
 
-`/control` is laid out as a dispatch screen rather than a dashboard: an alert strip, a tote
+`/control` is laid out as a dispatch screen rather than a dashboard: a status line, a tote
 board of counts, a priority-ordered call queue filling the screen, and a rail carrying the
-selected call, sector status and the command log.
+selected call, the unit status monitor, sector status and the command log.
 
 - **Priority, not just severity.** Critical/Major/Moderate/Minor also read as **P1–P4**,
   because that is what goes over the radio. The queue's default order is dispatch order —
@@ -173,15 +219,19 @@ selected call, sector status and the command log.
 - **Running clocks.** Each live call counts up rather than showing the time it came in. The
   clock brightens at three quarters of that incident's review threshold and turns crimson
   once it passes, so an incident going quiet is visible before anyone asks.
-- **Preview, don't navigate.** Selecting a call opens it in the rail. A control room that
-  loses the board to read one record has lost the board. Opening the full record is a
-  deliberate second action.
+- **Preview and dispatch, don't navigate.** Selecting a call opens it in the rail, with its
+  committed units and the controls to move them along. A control room that loses the board
+  to read one record has lost the board. Opening the full record is a deliberate second
+  action.
+- **A status line, not an alert.** It is always there — event status, day, command tier
+  engaged, units committed — and turns crimson with what is wrong, rather than appearing
+  only when something is. Its absence never has to be noticed.
 - **Keyboard first.** `↑`/`↓` (or `j`/`k`) walk the queue, `↵` opens the selected call, `/`
   jumps to the filter — and `↓` from the filter box steps straight into the results — and
   `N` starts a new incident. A focused chip keeps its own `↵`.
-- **No resource means no resource.** The flag and its count exclude incidents whose
-  deployment is masked by medical restriction, because "restricted" and "nothing sent" are
-  different facts and a board must not conflate them.
+- **Restricted is not absent.** The deployment note reads *restricted*, never *none
+  recorded*, for a role without medical clearance — those are different facts and a board
+  must not conflate them.
 
 The console is dark and the rest of the tool is not. That split is deliberate: the board is
 the screen that stays open all night, so it throws less light at the operators and only the
@@ -199,6 +249,8 @@ Nothing in the record can be deleted or quietly rewritten:
   raises if anything gets through.
 - The opening description, `created_at`, `created_by` and the incident reference are
   frozen after insert. Corrections go on the timeline, where they are attributed.
+- The response milestones — acknowledged, first unit on scene — are frozen once the clock
+  has stopped, so response times cannot be tidied up after the event.
 - Every status, severity, command-level, resource, location and closure change is written
   to the timeline **by the database**, so the entry cannot be skipped by a client.
 - `audit_log` additionally records a field-level `from`/`to` diff with the actor's name,
@@ -319,3 +371,19 @@ Database migrations are in `supabase/migrations/`, applied in order.
   Authentication → Policies once you have set real passwords.
 - Seeded accounts ship with a shared provisional password. Rotate it before the first
   live event.
+
+### Not built, and deliberately
+
+Two things the commercial products lead with are absent, because half-building them would
+be worse than not having them:
+
+- **A site map with incident pins.** Every event product puts one on the front page. Doing
+  it properly needs a site plan per event and a coordinate on every incident; the sector
+  board is the honest version of it until that exists.
+- **Occupancy counts.** The [SGSA control room
+  guidance](https://sgsa.org.uk/physical-factors/communications-and-control/control-room/)
+  expects entry counts taken every 15 minutes from gate opening. That is a real UK
+  requirement and it is not modelled here.
+
+Photo and video attachments on an incident are also missing, and are the smallest of the
+three to add.

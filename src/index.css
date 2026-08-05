@@ -350,21 +350,42 @@ a:focus-visible,
   text-transform: uppercase;
 }
 
-/* --------------------------------------------------------- alert strip */
+/* --------------------------------------------------------- status line */
 
-.cc-alert {
+/* Always present, like the status line on a dispatch terminal: what the
+   event is doing on the left, what is wrong on the right. It changes
+   colour rather than appearing, so its absence never has to be noticed. */
+.cc-status {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 14px;
-  padding: 9px 16px;
-  background: #2a0d13;
-  border-bottom: 1px solid #5c1c27;
-  border-left: 4px solid var(--color-sev-critical);
-  font-size: 12px;
+  gap: 5px 16px;
+  padding: 8px 16px;
+  background: var(--cc-raise);
+  border-bottom: 1px solid var(--cc-line);
+  border-left: 4px solid transparent;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.7px;
+  color: var(--cc-dim);
+}
+
+.cc-status.is-alarm {
+  background: #2a0d13;
+  border-bottom-color: #5c1c27;
+  border-left-color: var(--color-sev-critical);
+}
+
+.cc-status-alarm {
   color: #ff8a99;
+}
+
+.cc-status-key {
+  color: var(--cc-faint);
+}
+
+.cc-status-sep {
+  margin-left: auto;
 }
 
 /* ---------------------------------------------------------- tote board */
@@ -444,6 +465,25 @@ a:focus-visible,
     align-self: start;
     position: sticky;
     top: 14px;
+  }
+
+  /* A full roster and a busy command log would push the rail past the
+     viewport and drag the queue's height with it. Both scroll inside
+     their panel instead, so the board stays one screen. */
+  .cc-scroll {
+    max-height: 330px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #4a4a4a transparent;
+  }
+
+  .cc-scroll::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .cc-scroll::-webkit-scrollbar-thumb {
+    background: #4a4a4a;
+    border-radius: 4px;
   }
 }
 
@@ -559,8 +599,8 @@ a:focus-visible,
   .cc-row-wide {
     display: grid;
     grid-template-columns:
-      40px 78px 92px minmax(130px, 1.4fr)
-      minmax(104px, 1fr) 96px 98px;
+      38px 74px 84px minmax(118px, 1.3fr)
+      minmax(94px, 0.9fr) minmax(96px, 0.8fr) 86px 88px;
     align-items: center;
     gap: 10px;
   }
@@ -657,6 +697,116 @@ a:focus-visible,
   border-color: var(--color-sev-critical);
   background: #2a0d13;
   color: #ff8a99;
+}
+
+/* --------------------------------------------------------- unit status */
+
+/* The other half of a dispatch screen. Grouped by state so the answer to
+   "who can I send" is the top of the list, not a scan of the whole roster. */
+.cc-unit-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 14px;
+  background: #1a1a1a;
+  border-bottom: 1px solid var(--cc-line-soft);
+}
+
+.cc-unit {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--cc-line-soft);
+  border-left: 3px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cc-unit:hover {
+  background: #232323;
+}
+
+.cc-unit:focus-visible {
+  outline: 2px solid var(--color-teal);
+  outline-offset: -2px;
+}
+
+.cc-unit-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.cc-unit-call {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--cc-text);
+}
+
+.cc-unit-sub {
+  font-size: 10.5px;
+  color: var(--cc-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cc-unit-state {
+  margin-left: auto;
+  flex: none;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+}
+
+/* --------------------------------------------------------- dispatch bar */
+
+.cc-act {
+  padding: 5px 8px;
+  border: 1px solid var(--cc-line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--cc-dim);
+  font-family: inherit;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.cc-act:hover:not(:disabled) {
+  color: var(--cc-text);
+  border-color: #4a4a4a;
+}
+
+.cc-act:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.cc-act.is-go {
+  border-color: var(--color-teal);
+  color: var(--color-teal);
+}
+
+.cc-act.is-down {
+  border-color: #5c5c5c;
+}
+
+.cc-dispatch select {
+  width: 100%;
+  padding: 7px 9px;
+  background: var(--cc-base);
+  border: 1px solid var(--cc-line);
+  border-radius: 2px;
+  color: var(--cc-text);
+  font-size: 12px;
 }
 
 /* -------------------------------------------------------- sector board */

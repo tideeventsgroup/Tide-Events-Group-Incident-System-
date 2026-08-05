@@ -1,4 +1,4 @@
-import type { Severity, Status } from './types'
+import type { ResourceState, Severity, Status } from './types'
 
 /**
  * Escalation scale. Neutral grey through to crimson, kept deliberately clear of
@@ -77,6 +77,31 @@ export const COMMAND_RANK: Record<string, number> = {
   'Event Control (L2)': 2,
   'FMIC (L3)': 3,
   'Police Scotland (L4)': 4,
+}
+
+/**
+ * Unit states on the console. Deliberately not the severity scale — a unit
+ * being busy is not an escalation, and colouring it crimson would put a second
+ * meaning on the alarm colour. Free is green, committed runs teal-to-blue as
+ * the unit gets closer to the call, off duty is grey.
+ */
+export const RESOURCE_STATE_COLOUR: Record<ResourceState, string> = {
+  Available: '#4FA97D',
+  Assigned: '#25BEC8',
+  'En route': '#63A6BC',
+  'On scene': '#E8E8E8',
+  Clearing: '#8FA0A6',
+  'Off duty': '#5E5E5E',
+}
+
+/** Radio shorthand, for the dense unit row. */
+export const RESOURCE_STATE_SHORT: Record<ResourceState, string> = {
+  Available: 'FREE',
+  Assigned: 'ASSGN',
+  'En route': 'ENRTE',
+  'On scene': 'SCENE',
+  Clearing: 'CLEAR',
+  'Off duty': 'OFF',
 }
 
 /** Radio shorthand for the command tier, for the dense queue row. */

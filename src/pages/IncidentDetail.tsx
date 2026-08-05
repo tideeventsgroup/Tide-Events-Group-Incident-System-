@@ -5,7 +5,7 @@ import { useLive } from '../context/LiveContext'
 import { supabase } from '../lib/supabase'
 import { Banner, Button, Card, FieldLabel, SeverityBadge, Spinner, StatusPill } from '../components/ui'
 import { clockTime, dateShort, elapsed, stamp } from '../lib/format'
-import { SEVERITY_COLOUR } from '../lib/style'
+import { RESOURCE_STATE_COLOUR, SEVERITY_COLOUR } from '../lib/style'
 import {
   CATEGORIES,
   COMMAND_LEVELS,
@@ -86,7 +86,7 @@ export default function IncidentDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { profile, session } = useAuth()
-  const { refresh, lastSync, events } = useLive()
+  const { refresh, lastSync, events, units, dispatch } = useLive()
 
   const [incident, setIncident] = useState<BoardIncident | null>(null)
   const [timeline, setTimeline] = useState<TimelineEntry[]>([])
@@ -157,6 +157,11 @@ export default function IncidentDetail() {
     () => events.find((e) => e.id === incident?.event_id)?.zones ?? [],
     [events, incident?.event_id],
   )
+  const committedUnits = useMemo(
+    () => units.filter((u) => u.assigned_incident_id === id),
+    [units, id],
+  )
+
   const writable = canWrite(profile?.role) && !!incident && !incident.event_locked
   const closed = incident?.status === 'Resolved'
 
@@ -385,6 +390,88 @@ export default function IncidentDetail() {
 
         {/* ------------------------------------------------- sidebar column */}
         <div className="flex flex-col gap-3.5">
+          {/* Who is on this call, and the response times it will be judged on.
+              Assignment itself is done on the board, where the free units are. */}
+          <Card title="Units &amp; Response">
+            <div className="grid grid-cols-2 gap-3 border-b border-line-soft pb-3">
+              <div>
+                <div className="text-[10px] font-bold tracking-[0.5px] text-faint">
+                  ACKNOWLEDGED
+                </div>
+                <div className="mt-0.5 text-[13px] text-ink">
+                  {incident.acknowledged_at ? (
+                    <>
+                      {clockTime(incident.acknowledged_at)}{' '}
+                      <span className="text-[11px] text-muted">
+                        (+{elapsed(incident.created_at, new Date(incident.acknowledged_at).getTime())})
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-[12px] font-bold text-alert">Not acknowledged</span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] font-bold tracking-[0.5px] text-faint">ON SCENE</div>
+                <div className="mt-0.5 text-[13px] text-ink">
+                  {incident.on_scene_at ? (
+                    <>
+                      {clockTime(incident.on_scene_at)}{' '}
+                      <span className="text-[11px] text-muted">
+                        (+{elapsed(incident.created_at, new Date(incident.on_scene_at).getTime())})
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-[12px] text-faint">—</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {committedUnits.length === 0 ? (
+              <p className="pt-3 text-[12px] text-faint">
+                No unit is committed to this incident.
+                {writable && !closed && (
+                  <>
+                    {' '}
+                    Dispatch one from the{' '}
+                    <Link to="/control" className="font-bold text-teal underline">
+                      board
+                    </Link>
+                    .
+                  </>
+                )}
+              </p>
+            ) : (
+              <ul className="pt-3">
+                {committedUnits.map((u) => (
+                  <li
+                    key={u.id}
+                    className="flex flex-wrap items-center gap-2 border-b border-line-soft py-2 last:border-b-0"
+                  >
+                    <span className="text-[13px] font-bold text-ink">{u.callsign}</span>
+                    <span className="text-[12px] text-muted">{u.name}</span>
+                    <span
+                      className="ml-auto text-[11px] font-bold"
+                      style={{ color: RESOURCE_STATE_COLOUR[u.state] }}
+                    >
+                      {u.state.toUpperCase()}
+                    </span>
+                    {writable && !closed && (
+                      <button
+                        type="button"
+                        onClick={() => void dispatch(u.id, 'Available', null)}
+                        className="text-[11px] font-bold text-muted underline"
+                      >
+                        stand down
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
           <Card title="Incident Details">
             <FieldLabel htmlFor="d-zone">ZONE</FieldLabel>
             {zones.length > 0 ? (

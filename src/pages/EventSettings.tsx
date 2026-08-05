@@ -4,13 +4,18 @@ import { useLive } from '../context/LiveContext'
 import { supabase } from '../lib/supabase'
 import { Banner, Button, Card, ChipGroup, FieldLabel } from '../components/ui'
 import { addDays, dayLabel, daysBetween, retentionUntil, stamp } from '../lib/format'
+import { RESOURCE_STATE_COLOUR } from '../lib/style'
 import {
   EVENT_STATUSES,
+  RESOURCE_KINDS,
   canManageEvent,
+  canWrite,
+  isCommitted,
   type AuditEntry,
   type EventStatus,
   type EventRecord,
   type Profile,
+  type ResourceKind,
 } from '../lib/types'
 
 const RETENTION_OPTIONS = [
@@ -95,6 +100,139 @@ function NewEventForm({ onDone }: { onDone: () => void }) {
         </Button>
       </div>
     </div>
+  )
+}
+
+/**
+ * The unit roster — the teams, vehicles and contractors event control can send.
+ *
+ * Signing a unit on and off is a dispatcher's job rather than a configuration
+ * change, so any role that can work an incident can do it. Units are never
+ * deleted: one that has been committed to an incident is part of that
+ * incident's record, so it goes Off duty instead.
+ */
+function UnitRoster({ writable }: { writable: boolean }) {
+  const { activeEvent, units, dispatch, refresh } = useLive()
+  const [callsign, setCallsign] = useState('')
+  const [name, setName] = useState('')
+  const [kind, setKind] = useState<ResourceKind>('Security')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function add() {
+    if (!callsign.trim() || !name.trim()) {
+      setError('A unit needs a callsign and a name.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    const { error: err } = await supabase.from('resources').insert({
+      event_id: activeEvent!.id,
+      callsign: callsign.trim(),
+      name: name.trim(),
+      kind,
+    })
+    setBusy(false)
+    if (err) {
+      setError(err.message)
+      return
+    }
+    setCallsign('')
+    setName('')
+    await refresh()
+  }
+
+  return (
+    <Card title="Deployable Units">
+      <div className="hidden grid-cols-[110px_1fr_110px_130px_100px] border-b border-line py-2 text-[10px] font-bold tracking-[0.5px] text-faint sm:grid">
+        <div>CALLSIGN</div>
+        <div>UNIT</div>
+        <div>TYPE</div>
+        <div>STATE</div>
+        <div />
+      </div>
+
+      {units.length === 0 ? (
+        <p className="py-4 text-[12px] text-faint">
+          No units signed on. Add the teams, vehicles and contractors event control can send —
+          they become the dispatch list on the board.
+        </p>
+      ) : (
+        units.map((u) => (
+          <div
+            key={u.id}
+            className="grid gap-1 border-b border-line-soft py-2.5 last:border-b-0 sm:grid-cols-[110px_1fr_110px_130px_100px] sm:items-center sm:gap-0"
+          >
+            <div className="text-[13px] font-bold text-ink">{u.callsign}</div>
+            <div className="text-[13px] text-ink">{u.name}</div>
+            <div className="text-[12px] text-muted">{u.kind}</div>
+            <div
+              className="text-[11px] font-bold"
+              style={{ color: u.state === 'Off duty' ? '#8a8a8a' : RESOURCE_STATE_COLOUR[u.state] }}
+            >
+              {u.state.toUpperCase()}
+            </div>
+            <div className="sm:text-right">
+              {writable && !isCommitted(u.state) && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    void dispatch(u.id, u.state === 'Off duty' ? 'Available' : 'Off duty', null)
+                  }
+                  className="text-[11px] font-bold text-teal underline"
+                >
+                  {u.state === 'Off duty' ? 'Sign on' : 'Sign off'}
+                </button>
+              )}
+              {isCommitted(u.state) && (
+                <span className="text-[11px] text-faint">on a call</span>
+              )}
+            </div>
+          </div>
+        ))
+      )}
+
+      {writable && (
+        <div className="mt-3 grid gap-2 border-t border-line-soft pt-3 sm:grid-cols-[110px_1fr_130px_90px]">
+          <input
+            value={callsign}
+            onChange={(e) => setCallsign(e.target.value)}
+            placeholder="Sierra 6"
+            aria-label="Callsign"
+          />
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Zone D Stewards"
+            aria-label="Unit name"
+          />
+          <select
+            value={kind}
+            onChange={(e) => setKind(e.target.value as ResourceKind)}
+            aria-label="Unit type"
+          >
+            {RESOURCE_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {k}
+              </option>
+            ))}
+          </select>
+          <Button variant="ghost" disabled={busy} onClick={() => void add()}>
+            Add
+          </Button>
+        </div>
+      )}
+
+      {error && (
+        <p className="mt-2 text-[11px] font-bold text-alert">{error}</p>
+      )}
+
+      <p className="mt-3 border-t border-line-soft pt-3 text-[11px] leading-[1.5] text-faint">
+        Signing a unit on or off is a control room action, not a configuration change, so every
+        role that can work an incident can do it. Units are never deleted — one that has been
+        committed to an incident is part of that incident's record.
+      </p>
+    </Card>
   )
 }
 
@@ -433,6 +571,8 @@ export default function EventSettings() {
               zone they were logged against.
             </p>
           </Card>
+
+          <UnitRoster writable={canWrite(profile?.role) && !draft.locked} />
 
           <Card title="Control Room Team &amp; Roles">
             <div className="hidden grid-cols-[1fr_1.2fr_140px] border-b border-line py-2 text-[10px] font-bold tracking-[0.5px] text-faint sm:grid">

@@ -15,7 +15,7 @@ import {
   requestDurableStorage,
   type PendingIncident,
 } from '../lib/offlineQueue'
-import type { BoardIncident, EventRecord } from '../lib/types'
+import type { BoardIncident, EventRecord, ResourceState, ResourceUnit } from '../lib/types'
 import { useAuth } from './AuthContext'
 
 const STORAGE_KEY = 'tide.activeEventId'
@@ -42,6 +42,10 @@ interface LiveValue {
   activeEventId: string | null
   setActiveEventId: (id: string) => void
   incidents: BoardIncident[]
+  /** The event's deployable units — the other half of the dispatch picture. */
+  units: ResourceUnit[]
+  /** Commit a unit to an incident, move it along, or stand it down. */
+  dispatch: (unitId: string, state: ResourceState, incidentId: string | null) => Promise<string | null>
   /** Ids touched by the most recent realtime refresh, for row highlighting. */
   recentlyChanged: Set<string>
   connected: boolean
@@ -68,6 +72,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     () => localStorage.getItem(STORAGE_KEY),
   )
   const [incidents, setIncidents] = useState<BoardIncident[]>([])
+  const [units, setUnits] = useState<ResourceUnit[]>([])
   const [recentlyChanged, setRecentlyChanged] = useState<Set<string>>(new Set())
   const [connected, setConnected] = useState(false)
   const [lastSync, setLastSync] = useState<Date | null>(null)
@@ -83,6 +88,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, id)
     stampsRef.current = new Map()
     setIncidents([])
+    setUnits([])
     setActiveEventIdState(id)
   }, [])
 
@@ -115,12 +121,19 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     const id = eventIdRef.current
     if (!id) return
 
-    const { data, error } = await supabase
-      .from('incident_board')
-      .select('*')
-      .eq('event_id', id)
-      .order('created_at', { ascending: false })
+    // The calls and the units are one picture — fetched together so the board
+    // can never show a unit committed to an incident it has not yet seen.
+    const [board, roster] = await Promise.all([
+      supabase
+        .from('incident_board')
+        .select('*')
+        .eq('event_id', id)
+        .order('created_at', { ascending: false }),
+      supabase.from('resources').select('*').eq('event_id', id).order('callsign'),
+    ])
 
+    if (roster.data) setUnits(roster.data as ResourceUnit[])
+    const { data, error } = board
     if (error) return
 
     const rows = (data as BoardIncident[]) ?? []
@@ -145,6 +158,23 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const refreshPending = useCallback(async () => {
     setPending(await listPending())
   }, [])
+
+  /**
+   * Dispatch. The database enforces that a committed unit has a call and a
+   * free one does not, so the two fields always move together, and the
+   * timeline entry for the change is written server-side.
+   */
+  const dispatch = useCallback(
+    async (unitId: string, state: ResourceState, incidentId: string | null) => {
+      const { error } = await supabase
+        .from('resources')
+        .update({ state, assigned_incident_id: incidentId })
+        .eq('id', unitId)
+      await refresh()
+      return error?.message ?? null
+    },
+    [refresh],
+  )
 
   const syncNow = useCallback(async () => {
     if (!navigator.onLine) return
@@ -249,6 +279,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       activeEventId,
       setActiveEventId,
       incidents,
+      units,
+      dispatch,
       recentlyChanged,
       connected,
       lastSync,
@@ -267,6 +299,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       activeEventId,
       setActiveEventId,
       incidents,
+      units,
+      dispatch,
       recentlyChanged,
       connected,
       lastSync,
