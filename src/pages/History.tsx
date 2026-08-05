@@ -35,6 +35,7 @@ export default function History() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [statutory, setStatutory] = useState<'' | 'riddor' | 'safeguarding' | 'hospital'>('')
+  const [includeExercise, setIncludeExercise] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -70,6 +71,12 @@ export default function History() {
     const term = q.trim().toLowerCase()
     let out = rows
 
+    // Training exercises are real records in a real audit trail, but they are
+    // not what happened at a real event. They stay out of the history and its
+    // exports unless somebody asks for them, or an export handed to a
+    // licensing officer would quietly include a drill.
+    if (!includeExercise && !eventId) out = out.filter((r) => !r.event_is_exercise)
+
     // The statutory views. A licensing officer or an HSE query asks for one of
     // these three and nothing else, so they are one click rather than a search.
     if (statutory === 'riddor') out = out.filter((r) => r.riddor_reportable)
@@ -82,7 +89,7 @@ export default function History() {
         .filter(Boolean)
         .some((field) => String(field).toLowerCase().includes(term)),
     )
-  }, [rows, q, statutory])
+  }, [rows, q, statutory, includeExercise, eventId])
 
   const pageRows = filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
@@ -94,12 +101,13 @@ export default function History() {
     if (severity) parts.push(`severity ${severity}`)
     if (status) parts.push(`status ${status}`)
     if (from || to) parts.push(`${from || 'start'} to ${to || 'today'}`)
+    if (includeExercise && !eventId) parts.push('including training exercises')
     if (statutory === 'riddor') parts.push('RIDDOR reportable only')
     if (statutory === 'safeguarding') parts.push('safeguarding referrals only')
     if (statutory === 'hospital') parts.push('conveyed to hospital only')
     if (q.trim()) parts.push(`search "${q.trim()}"`)
     return parts.join(' · ')
-  }, [eventId, category, severity, status, from, to, q, statutory, events])
+  }, [eventId, category, severity, status, from, to, q, statutory, includeExercise, events])
 
   async function runExport(kind: 'csv' | 'pdf') {
     setExporting(kind)
@@ -185,6 +193,17 @@ export default function History() {
                 <option value="hospital">Conveyed to hospital</option>
                 <option value="safeguarding">Safeguarding referrals</option>
               </select>
+              {!eventId && (
+                <label className="flex items-center gap-1.5 text-[11px] whitespace-nowrap text-muted">
+                  <input
+                    type="checkbox"
+                    checked={includeExercise}
+                    onChange={(e) => setIncludeExercise(e.target.checked)}
+                    className="!w-auto"
+                  />
+                  Include exercises
+                </label>
+              )}
               <select
                 value={eventId}
                 onChange={(e) => setEventId(e.target.value)}

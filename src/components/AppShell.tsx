@@ -86,12 +86,30 @@ const TABS: Tab[] = [
  * destinations across the top has stopped being a tool, and the five above are
  * the ones reached without thinking.
  */
-const MORE: { to: string; label: string; note: string; alarm?: boolean }[] = [
-  { to: '/control/methane', label: 'M/ETHANE', note: 'JESIP major incident report', alarm: true },
+const MORE: {
+  to: string
+  label: string
+  note: string
+  alarm?: boolean
+  /** Hidden from read-only roles, whose policies would return an empty page. */
+  writeOnly?: boolean
+}[] = [
+  {
+    to: '/control/methane',
+    label: 'M/ETHANE',
+    note: 'JESIP major incident report',
+    alarm: true,
+    writeOnly: true,
+  },
   { to: '/control/map', label: 'Site Map', note: 'Incidents pinned on the site plan' },
   { to: '/control/occupancy', label: 'Occupancy', note: 'Entry counts against capacity' },
   { to: '/control/planning', label: 'Actions & Risks', note: 'Follow-ups and the risk register' },
-  { to: '/control/public', label: 'Public & Property', note: 'Public reports and lost property' },
+  {
+    to: '/control/public',
+    label: 'Public & Property',
+    note: 'Public reports and lost property',
+    writeOnly: true,
+  },
   { to: '/control/debrief', label: 'Debrief Pack', note: 'Post-event statistics and export' },
 ]
 
@@ -125,7 +143,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [moreOpen])
 
-  const tabs = TABS.filter((t) => !t.writeOnly || canWrite(profile?.role))
+  const write = canWrite(profile?.role)
+  const tabs = TABS.filter((t) => !t.writeOnly || write)
+  // A Client following a link to a page whose select policy excludes them gets
+  // a blank screen and no explanation. Do not offer the door.
+  const more = MORE.filter((m) => !m.writeOnly || write)
   const dayText = activeEvent
     ? `Day ${activeEvent.active_day} · ${dayLabel(
         addDays(activeEvent.start_date, activeEvent.active_day - 1),
@@ -299,7 +321,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                 CLOSE
               </button>
             </div>
-            {MORE.map((item) => (
+            {more.map((item) => (
               <Link
                 key={item.to}
                 to={item.to}

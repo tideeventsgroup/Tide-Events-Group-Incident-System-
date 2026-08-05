@@ -242,13 +242,15 @@ export interface DebriefStats {
   scene: number | null
   close: number | null
   unassignedEver: number
-  reviewBreaches: number
+  awaitingReview: number
   riddor: BoardIncident[]
   safeguarding: number
   conveyed: number
   followUp: BoardIncident[]
   openTasks: { title: string; priority: string; owner_label: string | null }[]
   peakOccupancy: number
+  peakAt: string | null
+  closingOccupancy: number
   totalIn: number
 }
 
@@ -310,11 +312,17 @@ export async function buildDebriefPdf(input: {
       ['Median time to first unit on scene', stats.scene === null ? '—' : `${stats.scene} min`],
       ['Median time to close', stats.close === null ? '—' : `${stats.close} min`],
       ['Never acknowledged', String(stats.unassignedEver)],
-      ['Review thresholds breached', String(stats.reviewBreaches)],
+      ['Open and awaiting review at export', String(stats.awaitingReview)],
       ['Conveyed to hospital', String(stats.conveyed)],
       ['RIDDOR reportable', String(stats.riddor.length)],
       ['Safeguarding referrals', String(stats.safeguarding)],
-      ['Peak occupancy', `${stats.peakOccupancy}${event.capacity ? ` of ${event.capacity}` : ''}`],
+      [
+        'Peak occupancy',
+        `${stats.peakOccupancy}${event.capacity ? ` of ${event.capacity}` : ''}${
+          stats.peakAt ? ` at ${stamp(stats.peakAt)}` : ''
+        }`,
+      ],
+      ['Occupancy at close', String(stats.closingOccupancy)],
       ['Units on the roster', String(input.units)],
     ],
     styles: { fontSize: 9, cellPadding: 5 },

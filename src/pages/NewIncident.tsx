@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLive } from '../context/LiveContext'
 import { supabase } from '../lib/supabase'
@@ -20,18 +20,28 @@ import {
   type Severity,
 } from '../lib/types'
 
+/** What the public-report triage hands across when raising a report. */
+interface Prefill {
+  fromReport?: string
+  description?: string
+  location?: string
+  reportedBy?: string
+}
+
 export default function NewIncident() {
   const navigate = useNavigate()
+  const prefill = (useLocation().state ?? {}) as Prefill
   const { profile, session } = useAuth()
   const { activeEvent, refresh, syncNow, refreshPending } = useLive()
 
   const [category, setCategory] = useState<Category | null>(null)
   const [severity, setSeverity] = useState<Severity | null>(null)
-  const [location, setLocation] = useState('')
+  const [location, setLocation] = useState(prefill.location ?? '')
   const [reportedBy, setReportedBy] = useState(
-    profile ? `${profile.full_name}${profile.callsign ? ` — ${profile.callsign}` : ''}` : '',
+    prefill.reportedBy ??
+      (profile ? `${profile.full_name}${profile.callsign ? ` — ${profile.callsign}` : ''}` : ''),
   )
-  const [description, setDescription] = useState('')
+  const [description, setDescription] = useState(prefill.description ?? '')
   const [commandLevel, setCommandLevel] = useState<CommandLevel>('Ground Team (L1)')
   const [resources, setResources] = useState('')
   const [followUp, setFollowUp] = useState(false)
@@ -144,6 +154,15 @@ export default function NewIncident() {
       setBusy(false)
       setError(insertError.message)
       return
+    }
+
+    // Close the loop on a public report: the report now points at the incident
+    // it became, so the triage list can show what happened to it.
+    if (prefill.fromReport) {
+      await supabase
+        .from('public_reports')
+        .update({ incident_id: payload.id })
+        .eq('id', prefill.fromReport)
     }
 
     await Promise.all([refresh(), syncNow()])

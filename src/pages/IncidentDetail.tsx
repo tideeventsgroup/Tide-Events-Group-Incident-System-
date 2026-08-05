@@ -14,6 +14,7 @@ import {
   CATEGORIES,
   COMMAND_LEVELS,
   DISPOSALS,
+  riddorCertain,
   riddorTriggered,
   SEVERITIES,
   STATUSES,
@@ -23,6 +24,7 @@ import {
   type Category,
   type CommandLevel,
   type EntryType,
+  type RiskRecord,
   type Severity,
   type Status,
   type TimelineEntry,
@@ -171,6 +173,19 @@ export default function IncidentDetail() {
     () => units.filter((u) => u.assigned_incident_id === id),
     [units, id],
   )
+
+  // The register's whole point is that an incident can name the risk it
+  // realised — the question a Safety Advisory Group asks afterwards. The
+  // column and the "realised" count existed; nothing could set it.
+  const [risks, setRisks] = useState<RiskRecord[]>([])
+  useEffect(() => {
+    if (!incident?.event_id) return
+    void supabase
+      .from('risks')
+      .select('*')
+      .eq('event_id', incident.event_id)
+      .then(({ data }) => setRisks((data as RiskRecord[]) ?? []))
+  }, [incident?.event_id])
 
   const writable = canWrite(profile?.role) && !!incident && !incident.event_locked
   const closed = incident?.status === 'Resolved'
@@ -567,9 +582,9 @@ export default function IncidentDetail() {
               {riddorTriggered(incident.disposal) && !incident.riddor_reportable && (
                 <div className="mb-3">
                   <Banner tone="error">
-                    Taken directly from the scene to hospital — reportable to HSE under RIDDOR
-                    regardless of how minor the injury proves. The duty falls on whoever is in
-                    control of the premises.
+                    {riddorCertain(incident.disposal)
+                      ? 'Taken directly from the scene to hospital — reportable to HSE under RIDDOR regardless of how minor the injury proves. The duty falls on whoever is in control of the premises.'
+                      : 'They went to hospital under their own steam. If that was a direct trip from the scene for treatment, it is reportable to HSE under RIDDOR — decide and tick, rather than leaving it.'}
                   </Banner>
                 </div>
               )}
@@ -673,6 +688,32 @@ export default function IncidentDetail() {
                 onChange={(e) => setDraft({ ...draft, location: e.target.value })}
                 className="mb-3"
               />
+            )}
+
+            {risks.length > 0 && (
+              <>
+                <FieldLabel htmlFor="d-risk">REALISED RISK</FieldLabel>
+                <select
+                  id="d-risk"
+                  disabled={!writable || closed}
+                  value={incident.risk_id ?? ''}
+                  onChange={(e) => void applyUpdate({ risk_id: e.target.value || null })}
+                  className="mb-1"
+                >
+                  <option value="">Not linked to a registered risk</option>
+                  {risks
+                    .filter((r) => r.active || r.id === incident.risk_id)
+                    .map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.title}
+                      </option>
+                    ))}
+                </select>
+                <p className="mb-3 text-[11px] leading-[1.45] text-faint">
+                  If this is a risk the event already identified, say so — it is the first
+                  thing a Safety Advisory Group asks at debrief.
+                </p>
+              </>
             )}
 
             <FieldLabel htmlFor="d-category">CATEGORY</FieldLabel>

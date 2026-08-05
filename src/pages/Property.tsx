@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLive } from '../context/LiveContext'
 import { supabase } from '../lib/supabase'
@@ -58,6 +58,7 @@ function Triage({ writable }: { writable: boolean }) {
   }, [load, lastSync])
 
   const untriaged = rows.filter((r) => !r.triaged_at && !r.dismissed)
+  const triaged = rows.filter((r) => r.triaged_at || r.dismissed)
 
   async function dismiss(r: PublicReport) {
     await supabase
@@ -65,6 +66,28 @@ function Triage({ writable }: { writable: boolean }) {
       .update({ dismissed: true, triaged_at: new Date().toISOString(), triaged_by: session!.user.id })
       .eq('id', r.id)
     await load()
+  }
+
+  /**
+   * Mark the report handled *before* leaving for the form, then hand the
+   * report's own id across so the new incident can link back to it. Without
+   * both halves the report sat in the untriaged list for ever while an
+   * incident quietly existed for it, and the form opened blank — the operator
+   * had to retype what the public had already written.
+   */
+  async function raise(r: PublicReport) {
+    await supabase
+      .from('public_reports')
+      .update({ triaged_at: new Date().toISOString(), triaged_by: session!.user.id })
+      .eq('id', r.id)
+    navigate('/control/new', {
+      state: {
+        fromReport: r.id,
+        description: r.what,
+        location: r.where_text ?? '',
+        reportedBy: `Member of the public${r.contact ? ` — ${r.contact}` : ''}`,
+      },
+    })
   }
 
   const reportUrl = `${window.location.origin}/report/${activeEvent?.id ?? ''}`
@@ -100,15 +123,7 @@ function Triage({ writable }: { writable: boolean }) {
                   <Button
                     variant="ghost"
                     className="!px-3 !py-1.5 !text-[11px]"
-                    onClick={() =>
-                      navigate('/control/new', {
-                        state: {
-                          description: r.what,
-                          location: r.where_text ?? '',
-                          reportedBy: `Public report${r.contact ? ` — ${r.contact}` : ''}`,
-                        },
-                      })
-                    }
+                    onClick={() => void raise(r)}
                   >
                     Raise as incident
                   </Button>
@@ -129,6 +144,31 @@ function Triage({ writable }: { writable: boolean }) {
           what the control room was told and when.
         </p>
       </Card>
+
+      {triaged.length > 0 && (
+        <Card title={`Already triaged (${triaged.length})`} className="mt-4" padded={false}>
+          {triaged.slice(0, 25).map((r) => (
+            <div key={r.id} className="border-b border-line-soft px-4 py-2.5 last:border-b-0">
+              <p className="text-[12px] leading-[1.5] text-muted">{r.what}</p>
+              <p className="mt-0.5 text-[11px] text-faint">
+                {stamp(r.at)} ·{' '}
+                {r.dismissed ? (
+                  'no action taken'
+                ) : r.incident_id ? (
+                  <Link
+                    to={`/control/incident/${r.incident_id}`}
+                    className="font-bold text-teal"
+                  >
+                    raised as an incident
+                  </Link>
+                ) : (
+                  'handled'
+                )}
+              </p>
+            </div>
+          ))}
+        </Card>
+      )}
     </>
   )
 }
@@ -143,6 +183,9 @@ function Property({ writable }: { writable: boolean }) {
   const [description, setDescription] = useState('')
   const [where, setWhere] = useState('')
   const [holder, setHolder] = useState('')
+  const [claiming, setClaiming] = useState<string | null>(null)
+  const [claimName, setClaimName] = useState('')
+  const [claimContact, setClaimContact] = useState('')
 
   const load = useCallback(async () => {
     if (!activeEvent) return
@@ -163,9 +206,10 @@ function Property({ writable }: { writable: boolean }) {
     e.preventDefault()
     if (!description.trim()) return
     setError(null)
+    // The reference is assigned by the database. Counting the rows this
+    // browser happened to have loaded gave two operators the same LP-004.
     const { error: err } = await supabase.from('lost_property').insert({
       event_id: activeEvent!.id,
-      ref: `LP-${String(rows.length + 1).padStart(3, '0')}`,
       description: description.trim(),
       found_location: where.trim() || null,
       holder: holder.trim() || null,
@@ -181,17 +225,19 @@ function Property({ writable }: { writable: boolean }) {
     await load()
   }
 
-  async function claim(item: PropertyRecord) {
-    const name = window.prompt('Claimed by (name)')
-    if (!name) return
-    await supabase
+  async function claim(item: PropertyRecord, name: string, contact: string) {
+    if (!name.trim()) return
+    const { error: err } = await supabase
       .from('lost_property')
       .update({
         state: 'Claimed',
         claimed_at: new Date().toISOString(),
-        claimed_by_name: name,
+        claimed_by_name: name.trim(),
+        claimed_contact: contact.trim() || null,
       })
       .eq('id', item.id)
+    if (err) setError(err.message)
+    setClaiming(null)
     await load()
   }
 
@@ -244,10 +290,8 @@ function Property({ writable }: { writable: boolean }) {
           <Empty>Nothing logged.</Empty>
         ) : (
           rows.map((item) => (
-            <div
-              key={item.id}
-              className="flex flex-wrap items-center gap-2 border-b border-line-soft px-4 py-3 last:border-b-0"
-            >
+            <div key={item.id} className="border-b border-line-soft px-4 py-3 last:border-b-0">
+              <div className="flex flex-wrap items-center gap-2">
               <span className="text-[11px] font-bold text-faint">{item.ref}</span>
               <span className="text-[13px] text-ink">{item.description}</span>
               {item.found_location && (
@@ -265,10 +309,14 @@ function Property({ writable }: { writable: boolean }) {
                 <>
                   <button
                     type="button"
-                    onClick={() => void claim(item)}
+                    onClick={() => {
+                      setClaiming(claiming === item.id ? null : item.id)
+                      setClaimName('')
+                      setClaimContact('')
+                    }}
                     className="text-[11px] font-bold text-teal underline"
                   >
-                    claim
+                    {claiming === item.id ? 'cancel' : 'claim'}
                   </button>
                   <select
                     aria-label={`State of ${item.ref}`}
@@ -290,9 +338,38 @@ function Property({ writable }: { writable: boolean }) {
                   </select>
                 </>
               )}
+              </div>
+
+              {claiming === item.id && (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    void claim(item, claimName, claimContact)
+                  }}
+                  className="mt-2.5 grid gap-2 border-t border-line-soft pt-2.5 sm:grid-cols-[1fr_1fr_auto]"
+                >
+                  <input
+                    value={claimName}
+                    onChange={(e) => setClaimName(e.target.value)}
+                    placeholder="Claimed by (name)"
+                    aria-label={`Claimant name for ${item.ref}`}
+                    autoFocus
+                  />
+                  <input
+                    value={claimContact}
+                    onChange={(e) => setClaimContact(e.target.value)}
+                    placeholder="Contact (optional)"
+                    aria-label={`Claimant contact for ${item.ref}`}
+                  />
+                  <Button type="submit" variant="ghost" disabled={!claimName.trim()}>
+                    Record claim
+                  </Button>
+                </form>
+              )}
             </div>
           ))
         )}
+        {error && <p className="px-4 py-2 text-[11px] font-bold text-alert">{error}</p>}
       </Card>
     </>
   )

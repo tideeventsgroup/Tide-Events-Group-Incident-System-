@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLive } from '../context/LiveContext'
@@ -84,7 +84,7 @@ export default function SiteMap() {
     await refreshEvents()
   }
 
-  async function place(e: React.MouseEvent<HTMLImageElement>) {
+  async function place(e: MouseEvent<HTMLImageElement>) {
     if (!placing || !imgRef.current) return
     const rect = imgRef.current.getBoundingClientRect()
     const x = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
@@ -257,7 +257,7 @@ export default function SiteMap() {
                   <span className="text-[12px] text-ink">{i.category}</span>
                   <span className="text-[12px] text-muted">{i.location}</span>
                   <span className="text-[11px] text-faint">{clockTime(i.created_at)}</span>
-                  {writable && (
+                  {writable && !i.restricted ? (
                     <Button
                       variant="ghost"
                       className="!ml-auto !px-3 !py-1.5 !text-[11px]"
@@ -265,6 +265,15 @@ export default function SiteMap() {
                     >
                       Place on plan
                     </Button>
+                  ) : (
+                    writable && (
+                      <span
+                        className="ml-auto text-[11px] text-faint"
+                        title="Placing a pin writes to the incident, which your role cannot do for a medical record"
+                      >
+                        🔒 restricted
+                      </span>
+                    )
                   )}
                 </div>
               ))

@@ -129,11 +129,16 @@ export default function Evidence({
       by_name: profile!.full_name,
     })
 
-    setBusy(false)
     if (rowErr) {
+      // The read policy on the bucket defers to the attachments row, so a file
+      // with no row is unreadable by everyone and simply sits there. Take it
+      // back out rather than leaving evidence nobody can see.
+      await supabase.storage.from('evidence').remove([path])
+      setBusy(false)
       setError(rowErr.message)
       return
     }
+    setBusy(false)
     setCaption('')
     if (fileRef.current) fileRef.current.value = ''
     await load()
@@ -168,7 +173,6 @@ export default function Evidence({
               ref={fileRef}
               type="file"
               accept="image/*,application/pdf,video/mp4"
-              capture="environment"
               disabled={busy}
               onChange={(e) => {
                 const file = e.target.files?.[0]

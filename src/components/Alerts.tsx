@@ -46,18 +46,28 @@ function chime(urgent: boolean) {
 }
 
 export default function Alerts() {
-  const { incidents, activeEvent } = useLive()
+  const { incidents, activeEvent, activeEventId, lastSync } = useLive()
   const [on, setOn] = useState(() => localStorage.getItem(STORAGE_KEY) === 'on')
   const seen = useRef<Set<string> | null>(null)
   const lastState = useRef<string | null>(null)
 
-  // Prime the seen-set on first load so signing in does not fire an alert for
-  // every incident already on the board.
+  const primedFor = useRef<string | null>(null)
+
+  /*
+   * Prime from the *first completed sync of each event*, not the first render.
+   * `incidents` starts as an empty array, so priming eagerly recorded nothing
+   * as seen and the first real board then arrived looking like a dozen brand
+   * new incidents — an alarm storm on every reload, which is exactly how you
+   * get a control room to switch alerting off and leave it off. Switching
+   * event re-primes for the same reason: arriving at a board that is already
+   * in Show stop is not a declaration.
+   */
   useEffect(() => {
-    if (seen.current === null && incidents.length >= 0) {
-      seen.current = new Set(incidents.map((i) => i.id))
-    }
-  }, [incidents])
+    if (!lastSync || primedFor.current === activeEventId) return
+    seen.current = new Set(incidents.map((i) => i.id))
+    lastState.current = activeEvent?.site_state ?? null
+    primedFor.current = activeEventId
+  }, [lastSync, activeEventId, incidents, activeEvent?.site_state])
 
   useEffect(() => {
     if (!on || seen.current === null) return

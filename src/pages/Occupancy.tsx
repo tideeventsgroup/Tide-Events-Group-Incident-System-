@@ -39,12 +39,14 @@ export default function Occupancy() {
 
   const load = useCallback(async () => {
     if (!activeEvent) return
+    // No limit. Each row is a delta, so the running total is only correct if
+    // every row is present — a cap here would silently understate the number
+    // an occupancy figure exists to be right about.
     const { data } = await supabase
       .from('occupancy_counts')
       .select('*')
       .eq('event_id', activeEvent.id)
       .order('at', { ascending: false })
-      .limit(400)
     setCounts((data as OccupancyCount[]) ?? [])
     setLoading(false)
   }, [activeEvent])
@@ -57,11 +59,19 @@ export default function Occupancy() {
     const totalIn = counts.reduce((n, c) => n + c.count_in, 0)
     const totalOut = counts.reduce((n, c) => n + c.count_out, 0)
     const last = counts[0] ?? null
+
+    let running = 0
+    let peak = 0
+    for (const c of [...counts].sort((a, b) => a.at.localeCompare(b.at))) {
+      running += c.count_in - c.count_out
+      if (running > peak) peak = running
+    }
     const overdueBy = last
       ? Math.floor((Date.now() - new Date(last.at).getTime()) / 60_000)
       : null
     return {
       inside: totalIn - totalOut,
+      peak,
       totalIn,
       totalOut,
       last,
@@ -152,8 +162,9 @@ export default function Occupancy() {
           )}
         </Card>
         <Card>
-          <div className="text-[10px] font-bold tracking-[0.5px] text-muted">TOTAL IN</div>
-          <div className="text-[28px] leading-tight font-bold text-ink">{totals.totalIn}</div>
+          <div className="text-[10px] font-bold tracking-[0.5px] text-muted">PEAK</div>
+          <div className="text-[28px] leading-tight font-bold text-ink">{totals.peak}</div>
+          <div className="text-[10px] text-faint">{totals.totalIn} admissions</div>
         </Card>
         <Card>
           <div className="text-[10px] font-bold tracking-[0.5px] text-muted">LAST COUNT</div>

@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { Banner, Button, Card, Empty } from '../components/ui'
 import { clockTime, dateLong, elapsed, stamp } from '../lib/format'
-import { PRIORITY, SEVERITY_COLOUR, SEVERITY_RANK } from '../lib/style'
+import { PRIORITY, SEVERITY_COLOUR } from '../lib/style'
 import {
   CATEGORIES,
   SEVERITIES,
@@ -93,9 +93,20 @@ export default function Debrief() {
       .map((z) => ({ key: z, n: incidents.filter((i) => i.location === z).length }))
       .sort((a, b) => b.n - a.n)
 
+    // Bucketed in the event's timezone, not the reader's. Everything else in
+    // this system formats in Europe/London; a debrief whose hour columns
+    // shifted depending on where it was opened would be worse than useless.
+    const hourOf = (iso: string) =>
+      Number(
+        new Intl.DateTimeFormat('en-GB', {
+          hour: '2-digit',
+          hour12: false,
+          timeZone: 'Europe/London',
+        }).format(new Date(iso)),
+      )
     const byHour = Array.from({ length: 24 }, (_, h) => ({
       key: String(h).padStart(2, '0'),
-      n: incidents.filter((i) => new Date(i.created_at).getHours() === h).length,
+      n: incidents.filter((i) => hourOf(i.created_at) === h).length,
     }))
 
     const ackTimes = incidents
@@ -111,6 +122,20 @@ export default function Debrief() {
     const totalIn = counts.reduce((n, c) => n + c.count_in, 0)
     const totalOut = counts.reduce((n, c) => n + c.count_out, 0)
 
+    // The peak, not the closing figure. Counts are deltas, so walk them in
+    // order and keep the high-water mark — that is the number a licensing
+    // review asks for, and "in minus out at the end of the night" is not it.
+    let running = 0
+    let peak = 0
+    let peakAt: string | null = null
+    for (const c of [...counts].sort((a, b) => a.at.localeCompare(b.at))) {
+      running += c.count_in - c.count_out
+      if (running > peak) {
+        peak = running
+        peakAt = c.at
+      }
+    }
+
     return {
       total: incidents.length,
       open: incidents.filter((i) => i.status !== 'Resolved').length,
@@ -122,13 +147,18 @@ export default function Debrief() {
       scene: median(sceneTimes),
       close: median(closeTimes),
       unassignedEver: incidents.filter((i) => !i.acknowledged_at).length,
-      reviewBreaches: incidents.filter((i) => reviewOverdueBy(i) !== null).length,
+      // Only open incidents can be overdue, so this is a snapshot at export,
+      // not a count of every threshold missed during the event. Labelled as
+      // such rather than quietly reading zero once everything is closed.
+      awaitingReview: incidents.filter((i) => reviewOverdueBy(i) !== null).length,
       riddor: incidents.filter((i) => i.riddor_reportable),
       safeguarding: incidents.filter((i) => i.safeguarding_referral).length,
       conveyed: incidents.filter((i) => i.disposal === 'Conveyed to hospital').length,
       followUp: incidents.filter((i) => i.follow_up_required),
       openTasks: tasks.filter((t) => t.status !== 'Done'),
-      peakOccupancy: totalIn - totalOut,
+      peakOccupancy: peak,
+      peakAt,
+      closingOccupancy: totalIn - totalOut,
       totalIn,
     }
   }, [incidents, counts, tasks])
@@ -273,8 +303,8 @@ export default function Debrief() {
               <dd className="font-bold text-ink">{stats.unassignedEver}</dd>
             </div>
             <div className="flex justify-between gap-3">
-              <dt className="text-muted">Review thresholds breached</dt>
-              <dd className="font-bold text-ink">{stats.reviewBreaches}</dd>
+              <dt className="text-muted">Open and awaiting review now</dt>
+              <dd className="font-bold text-ink">{stats.awaitingReview}</dd>
             </div>
           </dl>
 
@@ -322,9 +352,10 @@ export default function Debrief() {
 
           {counts.length > 0 && (
             <div className="mt-3 border-t border-line-soft pt-3 text-[12px] text-ink">
-              Peak occupancy <b>{stats.peakOccupancy}</b> of{' '}
-              <b>{activeEvent.capacity ?? '—'}</b> · {stats.totalIn} admissions across{' '}
-              {counts.length} counts.
+              Peak occupancy <b>{stats.peakOccupancy}</b>
+              {stats.peakAt ? ` at ${clockTime(stats.peakAt)}` : ''} of{' '}
+              <b>{activeEvent.capacity ?? '—'}</b> · closed on {stats.closingOccupancy} ·{' '}
+              {stats.totalIn} admissions across {counts.length} counts.
             </div>
           )}
         </Card>
@@ -389,9 +420,8 @@ export default function Debrief() {
           </ul>
         )}
         <p className="mt-3 border-t border-line-soft pt-3 text-[11px] leading-[1.5] text-faint">
-          Sorted by severity rank where times tie ({SEVERITY_RANK.Critical} is Critical). Every
-          figure here is derived from the record — nothing in this pack can say something the
-          audit trail contradicts.
+          Closed incidents only, longest first. Every figure in this pack is derived from the
+          record — nothing here can say something the audit trail contradicts.
         </p>
       </Card>
     </div>

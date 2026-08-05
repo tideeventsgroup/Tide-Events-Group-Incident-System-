@@ -300,10 +300,21 @@ function Risks({ writable }: { writable: boolean }) {
     void load()
   }, [load, lastSync])
 
+  const [showRetired, setShowRetired] = useState(false)
+
   const sorted = useMemo(
-    () => [...rows].sort((a, b) => riskScore(b) - riskScore(a)),
-    [rows],
+    () =>
+      [...rows]
+        .filter((r) => showRetired || r.active)
+        .sort((a, b) => riskScore(b) - riskScore(a)),
+    [rows, showRetired],
   )
+
+  async function setActive(r: RiskRecord, active: boolean) {
+    const { error: err } = await supabase.from('risks').update({ active }).eq('id', r.id)
+    if (err) setError(err.message)
+    await load()
+  }
 
   const realised = useMemo(() => {
     const map = new Map<string, number>()
@@ -408,7 +419,21 @@ function Risks({ writable }: { writable: boolean }) {
         </Card>
       )}
 
-      <Card title={`Risk register (${sorted.length})`} padded={false}>
+      <Card
+        title={`Risk register (${sorted.length})`}
+        padded={false}
+        action={
+          <label className="flex items-center gap-1.5 text-[11px] text-muted">
+            <input
+              type="checkbox"
+              checked={showRetired}
+              onChange={(e) => setShowRetired(e.target.checked)}
+              className="!w-auto"
+            />
+            Show retired
+          </label>
+        }
+      >
         {loading ? (
           <Spinner label="Loading risks" />
         ) : sorted.length === 0 ? (
@@ -429,7 +454,11 @@ function Risks({ writable }: { writable: boolean }) {
                   >
                     {band.toUpperCase()} {score}
                   </span>
-                  <span className="text-[13px] font-bold text-ink">{r.title}</span>
+                  <span
+                    className={`text-[13px] font-bold ${r.active ? 'text-ink' : 'text-faint line-through'}`}
+                  >
+                    {r.title}
+                  </span>
                   <span
                     className="text-[11px] font-bold"
                     style={{ color: SEVERITY_COLOUR.Minor }}
@@ -444,6 +473,15 @@ function Risks({ writable }: { writable: boolean }) {
                   <span className="ml-auto text-[11px] text-faint">
                     L{r.likelihood} × I{r.impact}
                   </span>
+                  {writable && (
+                    <button
+                      type="button"
+                      onClick={() => void setActive(r, !r.active)}
+                      className="text-[11px] font-bold text-teal underline"
+                    >
+                      {r.active ? 'retire' : 'reinstate'}
+                    </button>
+                  )}
                 </div>
                 {r.mitigation && (
                   <p className="mt-1 text-[12px] leading-[1.5] text-muted">{r.mitigation}</p>

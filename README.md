@@ -283,6 +283,10 @@ out since the last count — so the running total is derived rather than edited,
 reading is corrected by the next one instead of by rewriting history, and the board flags a
 count that is overdue.
 
+The headline figure is the **peak**, walked from the deltas in order, not the number left on
+site at the end of the night. Those are different numbers and it is the first one a licensing
+review asks for.
+
 ### Actions, risks, property and the public
 
 - **Actions** are follow-ups with an owner, a due time and a status, kept separate from
@@ -318,8 +322,9 @@ trail contradicts.
 
 An event can be marked a **training exercise**. Everything logged against it is a real record
 in a real audit trail — that is the point of rehearsing on the actual tool — but the board,
-the exports and the debrief pack all mark it EXERCISE, so it can never be mistaken for a live
-event afterwards.
+the exports and the debrief pack all mark it EXERCISE, and History leaves exercises out of
+any all-events view unless you tick to include them. An export handed to a licensing officer
+should not quietly contain a drill.
 
 ### The board is a console
 
@@ -359,6 +364,10 @@ close, and printed — so they stay on the light surface.
 Nothing in the record can be deleted or quietly rewritten:
 
 - `DELETE` is revoked on every table and blocked by trigger for good measure.
+- A row belongs to the event it was raised against, permanently. Units, actions, risks,
+  property and incidents cannot be re-parented, and anything that points at an incident must
+  point at one from the same event — enforced in the policies *and* by trigger, so it does
+  not depend on remembering to repeat it in the next policy somebody writes.
 - `incident_updates` and `audit_log` are append-only — `UPDATE` is revoked, and a trigger
   raises if anything gets through.
 - The opening description, `created_at`, `created_by` and the incident reference are
@@ -457,6 +466,11 @@ second typeface.
 ## GDPR & retention
 
 - Medical descriptions are treated as personal health data and restricted at the database.
+- **A Missing Person record is not restricted, deliberately.** A child's name, age and
+  clothing description are personal data of a minor, but every callsign on site needs them to
+  search — masking the description would make the record useless for the thing it exists to
+  do. Retention matters more than access here: these records fall under the event's retention
+  period like everything else, and your privacy notice should say so.
 - Each event carries a `retention_months` period (default 36 — ESMP minimum) plus free-text
   retention notes, surfaced under Event Settings with the computed review date. The flag is
   in place for a retention policy to act on; nothing is purged automatically yet.

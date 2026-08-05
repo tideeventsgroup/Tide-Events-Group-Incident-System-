@@ -270,8 +270,21 @@ export interface PublicReport {
   dismissed: boolean
 }
 
-/** Disposals that make an incident reportable to HSE under RIDDOR. */
+/**
+ * Disposals that should put the RIDDOR question in front of somebody.
+ *
+ * The duty turns on the person being taken *directly from the scene to
+ * hospital for treatment*. "Conveyed" is squarely that. "Own transport" is the
+ * judgement call — it can still be a direct trip from the scene — so the board
+ * raises the question rather than deciding it, and the operator ticks the flag
+ * or does not. Prompting on a maybe is cheap; missing one is not.
+ */
 export function riddorTriggered(disposal: Disposal): boolean {
+  return disposal === 'Conveyed to hospital' || disposal === 'Own transport to hospital'
+}
+
+/** Whether the prompt is a certainty or a judgement call. */
+export function riddorCertain(disposal: Disposal): boolean {
   return disposal === 'Conveyed to hospital'
 }
 
