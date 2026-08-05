@@ -34,6 +34,8 @@ export interface PendingIncident {
   command_level: CommandLevel
   resources_deployed: string | null
   follow_up_required: boolean
+  /** Type-specific answers, carried through the queue with everything else. */
+  details?: Record<string, string>
   /** Bookkeeping, stripped before the row is sent. */
   queued_at: string
   attempts: number

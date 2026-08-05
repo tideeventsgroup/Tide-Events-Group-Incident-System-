@@ -289,6 +289,38 @@ a:focus-visible,
   text-align: center;
 }
 
+/* The "More" sheet. On a phone it rises from the bottom above the tab bar;
+   on a desktop it drops from the app bar as a panel. */
+.more-sheet {
+  position: fixed;
+  z-index: 45;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 72vh;
+  overflow-y: auto;
+  padding-top: 10px;
+  padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  background: #ffffff;
+  border-top: 1px solid var(--color-line);
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 -6px 30px rgba(51, 51, 51, 0.22);
+}
+
+@media (min-width: 1024px) {
+  .more-sheet {
+    left: auto;
+    right: 18px;
+    bottom: auto;
+    top: 62px;
+    width: 340px;
+    max-height: 70vh;
+    padding-bottom: 8px;
+    border: 1px solid var(--color-line);
+    border-radius: 6px;
+  }
+}
+
 /* Plain CSS here is unlayered, so it outranks Tailwind's layered
    utilities — lg:hidden on the bar would silently lose. Hide it here. */
 @media (min-width: 1024px) {

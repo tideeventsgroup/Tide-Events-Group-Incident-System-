@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import type { BoardIncident, TimelineEntry } from './types'
+import type { BoardIncident, EventRecord, TimelineEntry } from './types'
 import { dateShort, stamp } from './format'
 
 const BRAND = { ink: '#333333', teal: '#25BEC8', faint: '#8a8a8a' }
@@ -51,6 +51,33 @@ const COLUMNS: Array<[string, (i: BoardIncident) => unknown]> = [
   ['Closed by', (i) => i.closed_by_name ?? ''],
   ['Closed at', (i) => (i.closed_at ? new Date(i.closed_at).toISOString() : '')],
   ['Follow-up required', (i) => (i.follow_up_required ? 'Yes' : 'No')],
+  ['Exercise', (i) => (i.event_is_exercise ? 'EXERCISE — not a live event' : 'No')],
+
+  // Dispatch and response. Callsigns are operational rather than clinical, so
+  // they are exported for every role; the milestones are what a debrief and a
+  // licensing review ask about.
+  ['Units assigned', (i) => i.assigned_units ?? ''],
+  ['Acknowledged at', (i) => (i.acknowledged_at ? new Date(i.acknowledged_at).toISOString() : '')],
+  ['First unit on scene', (i) => (i.on_scene_at ? new Date(i.on_scene_at).toISOString() : '')],
+
+  // Statutory. Restricted incidents still export these — the fact that a
+  // casualty was conveyed is what triggers the duty, and hiding it would make
+  // the export unusable for the purpose it exists for.
+  ['Disposal', (i) => i.disposal],
+  ['RIDDOR reportable', (i) => (i.riddor_reportable ? 'Yes' : 'No')],
+  ['RIDDOR reference', (i) => i.riddor_reference ?? ''],
+  ['RIDDOR submitted', (i) => (i.riddor_reported_at ? new Date(i.riddor_reported_at).toISOString() : '')],
+  ['Safeguarding referral', (i) => (i.safeguarding_referral ? 'Yes' : 'No')],
+
+  [
+    'Type-specific detail',
+    (i) =>
+      i.restricted
+        ? 'RESTRICTED — medical'
+        : Object.entries(i.details ?? {})
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(' | '),
+  ],
 ]
 
 export function exportCsv(ctx: ExportContext) {
@@ -201,4 +228,194 @@ export function exportPdf(ctx: ExportContext) {
   }
 
   doc.save(`tide-incident-report-${new Date().toISOString().slice(0, 10)}.pdf`)
+}
+
+/* ------------------------------------------------------------- debrief */
+
+export interface DebriefStats {
+  total: number
+  open: number
+  byCategory: { key: string; n: number }[]
+  bySeverity: { key: string; n: number }[]
+  byZone: { key: string; n: number }[]
+  ack: number | null
+  scene: number | null
+  close: number | null
+  unassignedEver: number
+  reviewBreaches: number
+  riddor: BoardIncident[]
+  safeguarding: number
+  conveyed: number
+  followUp: BoardIncident[]
+  openTasks: { title: string; priority: string; owner_label: string | null }[]
+  peakOccupancy: number
+  totalIn: number
+}
+
+/**
+ * The post-event pack, as a document somebody can put in front of a Safety
+ * Advisory Group. Everything on it is derived from the record — there is no
+ * figure here that the audit trail could contradict.
+ */
+export async function buildDebriefPdf(input: {
+  event: EventRecord
+  incidents: BoardIncident[]
+  states: { at: string; state: string; previous_state: string | null; declared_by_name: string; reason: string | null }[]
+  stats: DebriefStats
+  units: number
+  preparedBy: string
+}) {
+  const { event, stats, states, preparedBy } = input
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+  const width = doc.internal.pageSize.getWidth()
+
+  doc.setFillColor(BRAND.ink)
+  doc.rect(0, 0, width, 62, 'F')
+  doc.setTextColor('#FFFFFF')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(15)
+  doc.text('Event Debrief Pack', 40, 28)
+  doc.setTextColor(BRAND.teal)
+  doc.setFontSize(9)
+  doc.text('TIDE EVENTS GROUP SCOTLAND', 40, 46)
+
+  doc.setTextColor(BRAND.ink)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(12)
+  doc.text(event.name, 40, 88)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.text(
+    `${event.client}${event.venue ? ` · ${event.venue}` : ''} · ${dateShort(event.start_date)}`,
+    40,
+    103,
+  )
+  doc.text(`Prepared by ${preparedBy} · ${stamp(new Date())}`, 40, 117)
+
+  if (event.is_exercise) {
+    doc.setTextColor('#C41E3A')
+    doc.setFont('helvetica', 'bold')
+    doc.text('TRAINING EXERCISE — NOT A LIVE EVENT', 40, 133)
+    doc.setTextColor(BRAND.ink)
+    doc.setFont('helvetica', 'normal')
+  }
+
+  autoTable(doc, {
+    startY: event.is_exercise ? 148 : 134,
+    head: [['Headline', 'Value']],
+    body: [
+      ['Incidents logged', String(stats.total)],
+      ['Still open at export', String(stats.open)],
+      ['Median time to acknowledge', stats.ack === null ? '—' : `${stats.ack} min`],
+      ['Median time to first unit on scene', stats.scene === null ? '—' : `${stats.scene} min`],
+      ['Median time to close', stats.close === null ? '—' : `${stats.close} min`],
+      ['Never acknowledged', String(stats.unassignedEver)],
+      ['Review thresholds breached', String(stats.reviewBreaches)],
+      ['Conveyed to hospital', String(stats.conveyed)],
+      ['RIDDOR reportable', String(stats.riddor.length)],
+      ['Safeguarding referrals', String(stats.safeguarding)],
+      ['Peak occupancy', `${stats.peakOccupancy}${event.capacity ? ` of ${event.capacity}` : ''}`],
+      ['Units on the roster', String(input.units)],
+    ],
+    styles: { fontSize: 9, cellPadding: 5 },
+    headStyles: { fillColor: BRAND.ink, textColor: '#FFFFFF', fontSize: 8 },
+    columnStyles: { 0: { cellWidth: 260 } },
+    margin: { left: 40, right: 40 },
+  })
+
+  const after = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY
+
+  autoTable(doc, {
+    startY: after + 18,
+    head: [['Category', 'Count']],
+    body: stats.byCategory.map((r) => [r.key, String(r.n)]),
+    styles: { fontSize: 9, cellPadding: 4 },
+    headStyles: { fillColor: BRAND.ink, textColor: '#FFFFFF', fontSize: 8 },
+    margin: { left: 40, right: 320 },
+  })
+
+  autoTable(doc, {
+    startY: after + 18,
+    head: [['Zone', 'Count']],
+    body: stats.byZone.map((r) => [r.key, String(r.n)]),
+    styles: { fontSize: 9, cellPadding: 4 },
+    headStyles: { fillColor: BRAND.ink, textColor: '#FFFFFF', fontSize: 8 },
+    margin: { left: 320, right: 40 },
+  })
+
+  doc.addPage()
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.text('Statutory reporting', 40, 48)
+
+  autoTable(doc, {
+    startY: 60,
+    head: [['Ref', 'Category', 'Zone', 'Disposal', 'RIDDOR status']],
+    body:
+      stats.riddor.length > 0
+        ? stats.riddor.map((i) => [
+            i.ref,
+            i.category,
+            i.location,
+            i.disposal,
+            i.riddor_reported_at
+              ? `Submitted ${stamp(i.riddor_reported_at)}${i.riddor_reference ? ` (${i.riddor_reference})` : ''}`
+              : 'NOT YET SUBMITTED — due within 10 days',
+          ])
+        : [['—', '—', '—', '—', 'Nothing reportable']],
+    styles: { fontSize: 9, cellPadding: 5 },
+    headStyles: { fillColor: BRAND.ink, textColor: '#FFFFFF', fontSize: 8 },
+    margin: { left: 40, right: 40 },
+  })
+
+  const afterRiddor = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable
+    .finalY
+
+  autoTable(doc, {
+    startY: afterRiddor + 18,
+    head: [['Time', 'Site state', 'Declared by', 'Reason']],
+    body:
+      states.length > 0
+        ? states.map((s) => [
+            stamp(s.at),
+            `${s.previous_state ?? '—'} → ${s.state}`,
+            s.declared_by_name,
+            s.reason ?? '',
+          ])
+        : [['—', 'Normal throughout', '—', 'No show stop, evacuation, invacuation or lockdown']],
+    styles: { fontSize: 9, cellPadding: 5, overflow: 'linebreak' },
+    headStyles: { fillColor: BRAND.ink, textColor: '#FFFFFF', fontSize: 8 },
+    columnStyles: { 3: { cellWidth: 200 } },
+    margin: { left: 40, right: 40 },
+  })
+
+  const afterStates = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable
+    .finalY
+
+  autoTable(doc, {
+    startY: afterStates + 18,
+    head: [['Outstanding action', 'Priority', 'Owner']],
+    body:
+      stats.openTasks.length > 0
+        ? stats.openTasks.map((t) => [t.title, t.priority, t.owner_label ?? '—'])
+        : [['All actions closed out', '—', '—']],
+    styles: { fontSize: 9, cellPadding: 5, overflow: 'linebreak' },
+    headStyles: { fillColor: BRAND.ink, textColor: '#FFFFFF', fontSize: 8 },
+    margin: { left: 40, right: 40 },
+  })
+
+  const pages = doc.getNumberOfPages()
+  for (let p = 1; p <= pages; p += 1) {
+    doc.setPage(p)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.setTextColor('#8a8a8a')
+    doc.text(
+      `Tide Events Group — debrief pack — ${event.name} — page ${p} of ${pages}`,
+      40,
+      doc.internal.pageSize.getHeight() - 24,
+    )
+  }
+
+  doc.save(`tide-debrief-${event.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf`)
 }

@@ -27,7 +27,13 @@ Supabase (Postgres, Auth, Realtime) behind both. Staff reach the control room fr
 | `/control/log` | Event log — radio traffic, handovers, checks |
 | `/control/methane` | M/ETHANE reports and major incident declaration |
 | `/control/history` | History, search and audit export |
-| `/control/settings` | Event settings, team, retention |
+| `/control/map` | Site plan with incidents pinned on it |
+| `/control/occupancy` | Entry counts against licensed capacity |
+| `/control/planning` | Follow-up actions and the risk register |
+| `/control/public` | Public reports awaiting triage, and lost property |
+| `/control/debrief` | Post-event statistics and the debrief pack |
+| `/control/settings` | Event settings, team, units, capacity, retention |
+| `/report/:eventId` | Public "see something, say something" form — no account needed |
 
 The two halves are deliberately different design languages: League Spartan and generous
 whitespace out front, dense Arial and a severity-coded board in the control room. One is a
@@ -79,6 +85,14 @@ not in the interface.
 | `methane_reports` | Append-only M/ETHANE snapshots, per JESIP |
 | `event_log` | The radio loggist's running log — traffic that is not an incident |
 | `resources` | The deployable units for an event — callsign, type, live state, and the call they are committed to |
+| `site_state_log` | Append-only declarations: show stop, evacuation, invacuation, lockdown |
+| `occupancy_counts` | Append-only entry counts, in and out, against licensed capacity |
+| `tasks` | Follow-up actions with an owner, a due time and a status |
+| `incident_checklist` | Append-only ticks against the response plan for an incident type |
+| `attachments` | Photo, video and document evidence, in a private bucket |
+| `risks` | The event's risk register; an incident can point back at the risk it realised |
+| `lost_property` | Found items, who holds them, and who claimed them |
+| `public_reports` | What the public sent in, awaiting triage. `anon` may INSERT only |
 | `live_pings` | Content-free realtime signalling (see below) |
 
 Two views sit in front of the tables and are what the app actually reads:
@@ -206,6 +220,106 @@ kit, external services, mutual aid — stays restricted with the rest of the med
 Signing a unit on or off is a dispatcher's action rather than a configuration change, so
 every role that can work an incident can do it. Units are never deleted; one that has been
 committed to an incident is part of that incident's record, so it goes Off duty instead.
+
+### The form matches the incident
+
+Every incident used to be one free-text description whatever its category, which makes a
+record that reads fine and counts for nothing. The type-specific fields live in
+`src/lib/incidentFields.ts` — versioned in the client, stored as `jsonb`, audited on every
+change, and masked wholesale on a medical incident for roles without clearance.
+
+What they ask for is the part that matters:
+
+- **Security** — action taken, steward's SIA badge number, police reference, **body-worn video
+  reference**. Footage is routinely overwritten before anyone thinks to ask for it, so the
+  form asks at the time.
+- **Medical** — presenting complaint, treatment, clinician, ambulance reference, receiving
+  hospital, patient report form number. The clinical record stays with the medical provider;
+  this is the pointer to it.
+- **Missing Person** — a category of its own, because a lost child is the highest-anxiety
+  incident at a family event and has its own procedure and its own clock. Description,
+  last seen, reunification time, whether police were notified.
+- **CT-Suspicious** — the HOT assessment (Hidden, Obviously suspicious, Typical) in the
+  language the police and the Martyn's Law guidance use, plus the cordon distance set.
+- **Weather** — mean and gust readings with their source, and which action threshold was
+  reached.
+
+Each type also carries a **response plan** — the steps a control room is expected to have
+worked. Ticking one is append-only and writes to the incident timeline, so the plan is
+evidence rather than a to-do list, and a step cannot be un-ticked to make the record look
+tidier afterwards. An unworked step is not a failure; it is a fact the debrief should see.
+
+### Statutory reporting
+
+**RIDDOR.** A member of the public taken directly from the scene to hospital for treatment
+is reportable to HSE *regardless of how trivial the injury proves*, the report is due
+without delay with the online submission inside 10 days, and the duty falls on the person in
+control of the premises ([HSE](https://www.hse.gov.uk/riddor/reportable-incidents.htm)).
+The trigger is the casualty's **disposal**, which the control room already knows at the time
+— so recording "conveyed to hospital" raises the flag on the spot rather than leaving it to
+someone's memory a fortnight later. Once the submission is marked sent, its timestamp is
+frozen. History has a one-click RIDDOR view, and the debrief pack lists every reportable
+incident with its submission status.
+
+**Safeguarding.** A referral flag, on the record and in the timeline, for anything that has
+to go further than this system.
+
+### Site state
+
+HSE and the Purple Guide treat a controlled halt to a performance as a command action in its
+own right. The strongest thing this system could previously record was a METHANE report, so
+the event now carries a **site state** — Normal, Show stop, Evacuation, Invacuation,
+Lockdown — declared from the board's status line. Declaring one is reserved to the Incident
+Commander in the insert policy, needs a reason on the record, and is append-only: the current
+state is read off the latest declaration and the log shows how the night went. Every open
+incident is untouched by it, because this is the site's state, not theirs.
+
+### Occupancy
+
+The [SGSA](https://sgsa.org.uk/physical-factors/communications-and-control/control-room/)
+expects entry counts every fifteen minutes from gate opening through to half an hour after
+the start, and at many events it is a licensing condition. Each entry is a **delta** — in and
+out since the last count — so the running total is derived rather than edited, a mistyped
+reading is corrected by the next one instead of by rewriting history, and the board flags a
+count that is overdue.
+
+### Actions, risks, property and the public
+
+- **Actions** are follow-ups with an owner, a due time and a status, kept separate from
+  incidents so a barrier inspection booked for tomorrow never becomes an incident statistic.
+- **The risk register** is scored likelihood × impact, and an incident can point back at the
+  risk it realised — which is the question a Safety Advisory Group asks afterwards.
+- **Lost property** is logged, held, and claimed against a named person.
+- **Public reports** are the "see something, say something" channel. WeTrack does this over
+  SMS; a QR code pointing at `/report/:eventId` does the same job without a telco account,
+  works for anyone on site with a phone and no account, and `anon` holds INSERT on the table
+  and nothing else — so reports can be submitted by anybody and read back by nobody. The
+  public page deliberately says nothing about what is already happening on site.
+
+### Evidence
+
+Photographs, video and documents attach to an incident. The bucket is private and its read
+policy defers to the `attachments` table, which carries the same medical restriction as the
+incident — so a photograph of a casualty cannot be fetched by a role that is not permitted
+to read the incident it belongs to. URLs are signed and expire, so a link pasted into a group
+chat does not become a permanent hole in the restriction. Files cannot be deleted; evidence
+that can be removed is not evidence.
+
+### The debrief pack
+
+`/control/debrief` is the post-event report: incidents by category, severity, zone and hour;
+median time to acknowledge, to first unit on scene and to close; review-threshold breaches;
+conveyances, RIDDOR status and safeguarding referrals; site states declared; peak occupancy;
+outstanding follow-ups and actions. Exportable as a PDF you can put in front of a SAG.
+Everything on it is derived from the record, so the pack cannot say something the audit
+trail contradicts.
+
+### Exercise mode
+
+An event can be marked a **training exercise**. Everything logged against it is a real record
+in a real audit trail — that is the point of rehearsing on the actual tool — but the board,
+the exports and the debrief pack all mark it EXERCISE, so it can never be mistaken for a live
+event afterwards.
 
 ### The board is a console
 
@@ -374,16 +488,15 @@ Database migrations are in `supabase/migrations/`, applied in order.
 
 ### Not built, and deliberately
 
-Two things the commercial products lead with are absent, because half-building them would
-be worse than not having them:
-
-- **A site map with incident pins.** Every event product puts one on the front page. Doing
-  it properly needs a site plan per event and a coordinate on every incident; the sector
-  board is the honest version of it until that exists.
-- **Occupancy counts.** The [SGSA control room
-  guidance](https://sgsa.org.uk/physical-factors/communications-and-control/control-room/)
-  expects entry counts taken every 15 minutes from gate opening. That is a real UK
-  requirement and it is not modelled here.
-
-Photo and video attachments on an incident are also missing, and are the smallest of the
-three to add.
+- **Push notifications to a closed app.** Alerting is in — a P1 arriving or a site state
+  being declared raises a desktop notification and an audible tone — but those are
+  *foreground* notifications, firing while the tool is open. Waking a phone with the app
+  closed needs a push subscription, a VAPID key pair and a server to send from. That is a
+  deployment decision with secrets attached, so it is not faked here.
+- **SMS reporting.** The public channel is a web form behind a QR code rather than a text
+  number, because a shortcode needs a telco account. It does the same job for anyone with a
+  phone.
+- **CCTV, access control and radio integrations.** 24/7 Software lists these; they need the
+  venue's own systems and credentials, and there is nothing honest to build without them.
+- **Automatic retention purging.** The retention period is recorded and surfaced; nothing
+  deletes on it yet.

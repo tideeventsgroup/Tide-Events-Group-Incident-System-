@@ -4,6 +4,7 @@ import { useLive } from '../context/LiveContext'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { Empty } from '../components/ui'
+import SiteStateControl, { SITE_STATE_COLOUR } from '../components/SiteStateControl'
 import { clockTime, elapsed, elapsedClock, stamp } from '../lib/format'
 import {
   COMMAND_RANK,
@@ -18,6 +19,7 @@ import {
   STATUS_COLOUR_DARK,
 } from '../lib/style'
 import {
+  canManageEvent,
   canWrite,
   isCommitted,
   RESOURCE_STATES,
@@ -644,6 +646,7 @@ export default function Dashboard() {
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [commandLog, setCommandLog] = useState<TimelineEntry[]>([])
+  const [declaring, setDeclaring] = useState(false)
 
   const searchRef = useRef<HTMLInputElement>(null)
   const rowRefs = useRef(new Map<string, HTMLButtonElement>())
@@ -851,15 +854,37 @@ export default function Dashboard() {
   const pendingHere = pending.filter((p) => p.event_id === activeEvent.id)
   const escalated = COMMAND_RANK[stats.highest] >= 3
   const alarm = stats.critical > 0 || escalated || stats.unassigned > 0
+  const abnormal = activeEvent.site_state !== 'Normal'
 
   return (
     <div className="cc">
+      {declaring && <SiteStateControl onClose={() => setDeclaring(false)} />}
+
       {/* -------------------------------------------------------- status line */}
-      <div className={`cc-status ${alarm ? 'is-alarm' : ''}`} role="status">
-        {alarm && <span className="tide-pulse cc-status-alarm">●</span>}
+      <div className={`cc-status ${alarm || abnormal ? 'is-alarm' : ''}`} role="status">
+        {(alarm || abnormal) && <span className="tide-pulse cc-status-alarm">●</span>}
+        {activeEvent.is_exercise && (
+          <span className="cc-flag is-alarm">EXERCISE — NOT A LIVE EVENT</span>
+        )}
         <span>
           <span className="cc-status-key">EVENT </span>
           {activeEvent.status.toUpperCase()} · DAY {activeEvent.active_day}
+        </span>
+        <span>
+          <span className="cc-status-key">SITE </span>
+          <span style={{ color: SITE_STATE_COLOUR[activeEvent.site_state] }}>
+            {activeEvent.site_state.toUpperCase()}
+          </span>
+          {canManageEvent(profile?.role) && !activeEvent.locked && (
+            <button
+              type="button"
+              onClick={() => setDeclaring(true)}
+              className="ml-2 underline"
+              style={{ color: '#25BEC8' }}
+            >
+              DECLARE
+            </button>
+          )}
         </span>
         <span>
           <span className="cc-status-key">COMMAND </span>

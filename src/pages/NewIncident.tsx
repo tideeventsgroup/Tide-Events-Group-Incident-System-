@@ -5,6 +5,8 @@ import { useLive } from '../context/LiveContext'
 import { supabase } from '../lib/supabase'
 import { enqueue } from '../lib/offlineQueue'
 import { Banner, Button, ChipGroup, FieldLabel } from '../components/ui'
+import { DetailFields, cleanDetails, type Details } from '../components/DetailFields'
+import { fieldsFor } from '../lib/incidentFields'
 import { clockSeconds } from '../lib/format'
 import { SEVERITY_COLOUR } from '../lib/style'
 import {
@@ -33,6 +35,7 @@ export default function NewIncident() {
   const [commandLevel, setCommandLevel] = useState<CommandLevel>('Ground Team (L1)')
   const [resources, setResources] = useState('')
   const [followUp, setFollowUp] = useState(false)
+  const [details, setDetails] = useState<Details>({})
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -104,6 +107,7 @@ export default function NewIncident() {
       command_level: commandLevel,
       resources_deployed: resources.trim() || null,
       follow_up_required: followUp,
+      details: cleanDetails(details),
     }
 
     // No connection: hold it in the durable queue and get the operator back to
@@ -279,13 +283,24 @@ export default function NewIncident() {
           className="mb-5"
         />
 
-        <FieldLabel htmlFor="resources">RESOURCES DEPLOYED (OPTIONAL)</FieldLabel>
+        {/* The fields the type actually needs. Blank ones are dropped, so
+            nothing forces an operator to fill a form to get back to the radio. */}
+        {category && fieldsFor(category).length > 0 && (
+          <div className="mb-5 rounded-[3px] border border-line bg-wash px-4 py-4">
+            <p className="mb-3 text-[11px] font-bold tracking-[0.5px] text-ink">
+              {category.toUpperCase()} DETAIL — RECORD WHAT YOU HAVE
+            </p>
+            <DetailFields category={category} details={details} onChange={setDetails} />
+          </div>
+        )}
+
+        <FieldLabel htmlFor="resources">DEPLOYMENT NOTE (OPTIONAL)</FieldLabel>
         <input
           id="resources"
           type="text"
           value={resources}
           onChange={(e) => setResources(e.target.value)}
-          placeholder="Medical Team 2, Buggy Unit 1, Steward escort ×2"
+          placeholder="Kit, external services, mutual aid — units are dispatched from the board"
           className="mb-5"
         />
 

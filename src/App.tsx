@@ -10,12 +10,18 @@ import History from './pages/History'
 import EventSettings from './pages/EventSettings'
 import Methane from './pages/Methane'
 import EventLog from './pages/EventLog'
+import Occupancy from './pages/Occupancy'
+import Planning from './pages/Planning'
+import PropertyAndReports from './pages/Property'
+import Debrief from './pages/Debrief'
+import SiteMap from './pages/SiteMap'
 import PwaStatus from './components/PwaStatus'
 import Home from './site/Home'
 import Services from './site/Services'
 import MartynsLaw from './site/MartynsLaw'
 import About from './site/About'
 import Contact from './site/Contact'
+import Report from './site/Report'
 
 /** The control room. Everything behind /control requires a signed-in profile. */
 function ControlRoom() {
@@ -52,6 +58,11 @@ function ControlRoom() {
           <Route path="incident/:id" element={<IncidentDetail />} />
           <Route path="log" element={<EventLog />} />
           <Route path="methane" element={<Methane />} />
+          <Route path="occupancy" element={<Occupancy />} />
+          <Route path="planning" element={<Planning />} />
+          <Route path="public" element={<PropertyAndReports />} />
+          <Route path="map" element={<SiteMap />} />
+          <Route path="debrief" element={<Debrief />} />
           <Route path="history" element={<History />} />
           <Route path="settings" element={<EventSettings />} />
           <Route path="*" element={<Navigate to="/control" replace />} />
@@ -73,6 +84,8 @@ export default function App() {
           <Route path="/martyns-law" element={<MartynsLaw />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
+          {/* Public "see something, say something" — reached by a QR code on site */}
+          <Route path="/report/:eventId" element={<Report />} />
 
           {/* Incident Management System */}
           <Route path="/control/*" element={<ControlRoom />} />

@@ -5,6 +5,7 @@ import { useLive } from '../context/LiveContext'
 import { clockSeconds, dayLabel, addDays } from '../lib/format'
 import { initials } from '../lib/style'
 import { canWrite } from '../lib/types'
+import Alerts from './Alerts'
 
 /* ------------------------------------------------------------------ icons */
 /* Inline so the shell has no icon dependency and works offline. */
@@ -61,12 +62,37 @@ interface Tab {
   primary?: boolean
 }
 
+function MoreIcon() {
+  return (
+    <svg {...ICON} stroke="currentColor" strokeLinecap="round">
+      <circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+/** The five that are in an operator's hands all night. */
 const TABS: Tab[] = [
   { to: '/control', label: 'Dashboard', short: 'Board', end: true, icon: BoardIcon },
   { to: '/control/log', label: 'Event Log', short: 'Log', end: false, icon: LogbookIcon },
   { to: '/control/new', label: 'New Incident', short: 'New', end: false, icon: LogIcon, writeOnly: true, primary: true },
   { to: '/control/history', label: 'History', short: 'History', end: false, icon: HistoryIcon },
   { to: '/control/settings', label: 'Event Settings', short: 'Event', end: false, icon: SettingsIcon },
+]
+
+/**
+ * Everything else, behind one door. A control room tool that puts twelve
+ * destinations across the top has stopped being a tool, and the five above are
+ * the ones reached without thinking.
+ */
+const MORE: { to: string; label: string; note: string; alarm?: boolean }[] = [
+  { to: '/control/methane', label: 'M/ETHANE', note: 'JESIP major incident report', alarm: true },
+  { to: '/control/map', label: 'Site Map', note: 'Incidents pinned on the site plan' },
+  { to: '/control/occupancy', label: 'Occupancy', note: 'Entry counts against capacity' },
+  { to: '/control/planning', label: 'Actions & Risks', note: 'Follow-ups and the risk register' },
+  { to: '/control/public', label: 'Public & Property', note: 'Public reports and lost property' },
+  { to: '/control/debrief', label: 'Debrief Pack', note: 'Post-event statistics and export' },
 ]
 
 function LiveClock() {
@@ -83,10 +109,21 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const { events, activeEvent, activeEventId, setActiveEventId, connected, pending } = useLive()
   const { pathname } = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
 
   useEffect(() => {
     setMenuOpen(false)
+    setMoreOpen(false)
   }, [pathname])
+
+  useEffect(() => {
+    if (!moreOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMoreOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [moreOpen])
 
   const tabs = TABS.filter((t) => !t.writeOnly || canWrite(profile?.role))
   const dayText = activeEvent
@@ -134,6 +171,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         </div>
 
         <div className="flex shrink-0 items-center gap-3 sm:gap-5">
+          <Alerts />
           <div className="hidden items-center gap-1.5 md:flex">
             <span
               className={`h-[7px] w-[7px] rounded-full ${connected ? 'bg-ok tide-pulse' : 'bg-[#8a8a8a]'}`}
@@ -146,16 +184,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
           {/* Desktop tabs sit in the bar; small screens get the bottom bar. */}
           <nav className="hidden items-center gap-1 lg:flex">
-            <NavLink
-              to="/control/methane"
-              className={({ isActive }) =>
-                `rounded-full px-3.5 py-2 text-[12.5px] font-bold no-underline transition-colors ${
-                  isActive ? 'bg-alert text-white' : 'text-[#c8c8c8] hover:bg-[#444] hover:text-white'
-                }`
-              }
-            >
-              M/ETHANE
-            </NavLink>
             {tabs.map((tab) => (
               <NavLink
                 key={tab.to}
@@ -172,6 +200,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
                 {tab.label}
               </NavLink>
             ))}
+            <button
+              type="button"
+              onClick={() => setMoreOpen(true)}
+              className="rounded-full px-3.5 py-2 text-[12.5px] font-bold text-[#c8c8c8] transition-colors hover:bg-[#444] hover:text-white"
+            >
+              More ▾
+            </button>
           </nav>
 
           <div className="relative">
@@ -240,9 +275,60 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
       <main className="app-main">{children}</main>
 
+      {/* ------------------------------------------------------ more sheet */}
+      {moreOpen && (
+        <>
+          <button
+            type="button"
+            aria-label="Close menu"
+            onClick={() => setMoreOpen(false)}
+            className="fixed inset-0 z-40 cursor-default bg-black/50"
+          />
+          <div
+            role="dialog"
+            aria-label="More sections"
+            className="more-sheet"
+          >
+            <div className="flex items-center justify-between px-4 pt-1 pb-3">
+              <p className="text-[11px] font-bold tracking-[1.2px] text-faint">MORE</p>
+              <button
+                type="button"
+                onClick={() => setMoreOpen(false)}
+                className="text-[11px] font-bold text-muted"
+              >
+                CLOSE
+              </button>
+            </div>
+            {MORE.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className="flex items-baseline gap-2 border-t border-line-soft px-4 py-3.5 no-underline"
+              >
+                <span
+                  className={`text-[14px] font-bold ${item.alarm ? 'text-alert' : 'text-ink'}`}
+                >
+                  {item.label}
+                </span>
+                <span className="text-[11px] text-faint">{item.note}</span>
+              </Link>
+            ))}
+            <Link
+              to="/control/settings"
+              className="flex items-baseline gap-2 border-t border-line-soft px-4 py-3.5 no-underline lg:hidden"
+            >
+              <span className="text-[14px] font-bold text-ink">Event Settings</span>
+              <span className="text-[11px] text-faint">Configuration, team, units, retention</span>
+            </Link>
+          </div>
+        </>
+      )}
+
       {/* --------------------------------------------- bottom tab bar */}
       <nav className="tab-bar lg:hidden" aria-label="Sections">
-        {tabs.map((tab) => (
+        {tabs
+          .filter((t) => t.to !== '/control/settings')
+          .map((tab) => (
           <NavLink
             key={tab.to}
             to={tab.to}
@@ -262,6 +348,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
             )}
           </NavLink>
         ))}
+        <button type="button" onClick={() => setMoreOpen(true)} className="tab">
+          <span className="tab-icon">
+            <MoreIcon />
+          </span>
+          <span className="tab-label">More</span>
+        </button>
       </nav>
     </div>
   )

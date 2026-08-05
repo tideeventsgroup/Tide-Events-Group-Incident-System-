@@ -34,6 +34,7 @@ export default function History() {
   const [status, setStatus] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
+  const [statutory, setStatutory] = useState<'' | 'riddor' | 'safeguarding' | 'hospital'>('')
 
   useEffect(() => {
     let active = true
@@ -67,13 +68,21 @@ export default function History() {
   // Free-text search runs client side across the filtered set.
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
-    if (!term) return rows
-    return rows.filter((r) =>
+    let out = rows
+
+    // The statutory views. A licensing officer or an HSE query asks for one of
+    // these three and nothing else, so they are one click rather than a search.
+    if (statutory === 'riddor') out = out.filter((r) => r.riddor_reportable)
+    if (statutory === 'safeguarding') out = out.filter((r) => r.safeguarding_referral)
+    if (statutory === 'hospital') out = out.filter((r) => r.disposal === 'Conveyed to hospital')
+
+    if (!term) return out
+    return out.filter((r) =>
       [r.ref, r.location, r.category, r.description, r.reported_by, r.created_by_name, r.outcome]
         .filter(Boolean)
         .some((field) => String(field).toLowerCase().includes(term)),
     )
-  }, [rows, q])
+  }, [rows, q, statutory])
 
   const pageRows = filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
@@ -85,9 +94,12 @@ export default function History() {
     if (severity) parts.push(`severity ${severity}`)
     if (status) parts.push(`status ${status}`)
     if (from || to) parts.push(`${from || 'start'} to ${to || 'today'}`)
+    if (statutory === 'riddor') parts.push('RIDDOR reportable only')
+    if (statutory === 'safeguarding') parts.push('safeguarding referrals only')
+    if (statutory === 'hospital') parts.push('conveyed to hospital only')
     if (q.trim()) parts.push(`search "${q.trim()}"`)
     return parts.join(' · ')
-  }, [eventId, category, severity, status, from, to, q, events])
+  }, [eventId, category, severity, status, from, to, q, statutory, events])
 
   async function runExport(kind: 'csv' | 'pdf') {
     setExporting(kind)
@@ -162,6 +174,17 @@ export default function History() {
                 aria-label="Search incidents"
                 className="!text-[12px] sm:col-span-2 lg:col-span-1"
               />
+              <select
+                value={statutory}
+                onChange={(e) => setStatutory(e.target.value as typeof statutory)}
+                aria-label="Statutory view"
+                className="!text-[12px]"
+              >
+                <option value="">All records</option>
+                <option value="riddor">RIDDOR reportable</option>
+                <option value="hospital">Conveyed to hospital</option>
+                <option value="safeguarding">Safeguarding referrals</option>
+              </select>
               <select
                 value={eventId}
                 onChange={(e) => setEventId(e.target.value)}

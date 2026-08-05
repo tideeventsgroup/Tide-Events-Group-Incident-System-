@@ -335,6 +335,8 @@ export default function EventSettings() {
                 start_date: draft.start_date,
                 end_date: draft.end_date,
                 expected_attendance: draft.expected_attendance,
+                capacity: draft.capacity,
+                is_exercise: draft.is_exercise,
                 status: draft.status,
                 zones: draft.zones,
                 retention_months: draft.retention_months,
@@ -437,7 +439,44 @@ export default function EventSettings() {
                   onChange={(e) => setDraft({ ...draft, expected_attendance: e.target.value })}
                 />
               </div>
+              <div>
+                <FieldLabel htmlFor="e-cap">LICENSED CAPACITY</FieldLabel>
+                <input
+                  id="e-cap"
+                  type="number"
+                  min={1}
+                  disabled={!manager || draft.locked}
+                  value={draft.capacity ?? ''}
+                  onChange={(e) =>
+                    setDraft({ ...draft, capacity: e.target.value ? Number(e.target.value) : null })
+                  }
+                />
+                <p className="mt-1 text-[11px] text-faint">
+                  Occupancy counts are shown against this. The SGSA expects counts every 15
+                  minutes from gate opening.
+                </p>
+              </div>
             </div>
+
+            {/* A training exercise is real data in a real audit trail — it is
+                marked, not hidden, and kept out of live statistics. */}
+            <label className="mb-5 flex items-start gap-2.5 rounded-[3px] border border-line bg-wash px-3.5 py-3 text-[13px] text-ink">
+              <input
+                type="checkbox"
+                disabled={!manager || draft.locked}
+                checked={draft.is_exercise}
+                onChange={(e) => setDraft({ ...draft, is_exercise: e.target.checked })}
+                className="!mt-0.5 !w-auto"
+              />
+              <span>
+                This is a training exercise
+                <span className="block text-[11px] leading-[1.5] text-faint">
+                  Everything logged against it is a real record in a real audit trail, but the
+                  board, exports and the debrief pack all mark it EXERCISE so it can never be
+                  mistaken for a live event.
+                </span>
+              </span>
+            </label>
 
             <p className="mb-2 text-[11px] font-bold tracking-[0.5px] text-ink">EVENT STATUS</p>
             <div className="mb-5">

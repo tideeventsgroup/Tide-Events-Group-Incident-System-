@@ -5,10 +5,39 @@ export const CATEGORIES = [
   'Weather',
   'Fire',
   'Welfare',
+  'Missing Person',
   'Structural',
   'CT-Suspicious',
   'Other',
 ] as const
+
+/**
+ * How a casualty left the incident. This is the RIDDOR trigger: a member of
+ * the public taken directly from the scene to hospital for treatment is
+ * reportable to HSE regardless of how trivial the injury proves, and the duty
+ * falls on the person in control of the premises.
+ */
+export const DISPOSALS = [
+  'Not applicable',
+  'Treated on site',
+  'Discharged',
+  'Referred to GP',
+  'Refused treatment',
+  'Conveyed to hospital',
+  'Own transport to hospital',
+] as const
+
+export const SITE_STATES = [
+  'Normal',
+  'Show stop',
+  'Evacuation',
+  'Invacuation',
+  'Lockdown',
+] as const
+
+export const TASK_STATUSES = ['Open', 'In progress', 'Blocked', 'Done'] as const
+export const TASK_PRIORITIES = ['Low', 'Normal', 'High', 'Urgent'] as const
+export const PROPERTY_STATES = ['Held', 'Claimed', 'Handed to police', 'Disposed'] as const
 
 export const SEVERITIES = ['Minor', 'Moderate', 'Major', 'Critical'] as const
 
@@ -31,6 +60,11 @@ export const ROLES = [
 export const EVENT_STATUSES = ['Standby', 'Live', 'Closed'] as const
 
 export type Category = (typeof CATEGORIES)[number]
+export type Disposal = (typeof DISPOSALS)[number]
+export type SiteState = (typeof SITE_STATES)[number]
+export type TaskStatus = (typeof TASK_STATUSES)[number]
+export type TaskPriority = (typeof TASK_PRIORITIES)[number]
+export type PropertyState = (typeof PROPERTY_STATES)[number]
 export type Severity = (typeof SEVERITIES)[number]
 export type Status = (typeof STATUSES)[number]
 export type CommandLevel = (typeof COMMAND_LEVELS)[number]
@@ -63,6 +97,11 @@ export interface EventRecord {
   incident_seq: number
   created_at: string
   created_by: string | null
+  site_state: SiteState
+  site_state_at: string | null
+  capacity: number | null
+  site_plan_path: string | null
+  is_exercise: boolean
 }
 
 /** A row of `public.incident_board` — free text is masked server-side when
@@ -102,9 +141,150 @@ export interface BoardIncident {
   created_by_name: string | null
   created_by_role: Role | null
   closed_by_name: string | null
+  /** Type-specific answers. Masked to `{}` when the medical restriction bites. */
+  details: Record<string, string>
+  disposal: Disposal
+  safeguarding_referral: boolean
+  riddor_reportable: boolean
+  riddor_reference: string | null
+  riddor_reported_at: string | null
+  risk_id: string | null
+  /** Pin position on the site plan, as a fraction of the image. */
+  map_x: number | null
+  map_y: number | null
   event_name: string
   event_client: string
   event_locked: boolean
+  event_site_state: SiteState
+  event_is_exercise: boolean
+}
+
+export interface SiteStateEntry {
+  id: string
+  event_id: string
+  at: string
+  state: SiteState
+  previous_state: SiteState | null
+  declared_by: string | null
+  declared_by_name: string
+  declared_by_role: Role | null
+  reason: string | null
+}
+
+export interface OccupancyCount {
+  id: string
+  event_id: string
+  at: string
+  zone: string | null
+  count_in: number
+  count_out: number
+  recorded_by: string | null
+  recorded_by_name: string
+  note: string | null
+}
+
+export interface TaskRecord {
+  id: string
+  event_id: string
+  incident_id: string | null
+  title: string
+  detail: string | null
+  status: TaskStatus
+  priority: TaskPriority
+  owner_id: string | null
+  owner_label: string | null
+  due_at: string | null
+  done_at: string | null
+  created_at: string
+  created_by: string | null
+  created_by_name: string
+}
+
+export interface ChecklistTick {
+  id: string
+  incident_id: string
+  event_id: string
+  step_key: string
+  at: string
+  by_id: string | null
+  by_name: string
+}
+
+export interface Attachment {
+  id: string
+  event_id: string
+  incident_id: string | null
+  path: string
+  filename: string
+  mime_type: string
+  bytes: number
+  caption: string | null
+  at: string
+  by_id: string | null
+  by_name: string
+}
+
+export interface RiskRecord {
+  id: string
+  event_id: string
+  title: string
+  category: Category
+  likelihood: number
+  impact: number
+  mitigation: string | null
+  owner_label: string | null
+  active: boolean
+  created_at: string
+  created_by: string | null
+  created_by_name: string
+}
+
+export interface PropertyRecord {
+  id: string
+  event_id: string
+  ref: string | null
+  description: string
+  found_at: string
+  found_location: string | null
+  state: PropertyState
+  holder: string | null
+  claimed_at: string | null
+  claimed_by_name: string | null
+  claimed_contact: string | null
+  notes: string | null
+  created_at: string
+  created_by: string | null
+  created_by_name: string
+}
+
+export interface PublicReport {
+  id: string
+  event_id: string
+  at: string
+  what: string
+  where_text: string | null
+  contact: string | null
+  triaged_at: string | null
+  triaged_by: string | null
+  incident_id: string | null
+  dismissed: boolean
+}
+
+/** Disposals that make an incident reportable to HSE under RIDDOR. */
+export function riddorTriggered(disposal: Disposal): boolean {
+  return disposal === 'Conveyed to hospital'
+}
+
+/** Risk score, 1–25. The register is sorted on it. */
+export function riskScore(r: { likelihood: number; impact: number }): number {
+  return r.likelihood * r.impact
+}
+
+export function riskBand(score: number): 'Low' | 'Medium' | 'High' | 'Extreme' {
+  if (score >= 20) return 'Extreme'
+  if (score >= 12) return 'High'
+  if (score >= 6) return 'Medium'
+  return 'Low'
 }
 
 export const RESOURCE_KINDS = [

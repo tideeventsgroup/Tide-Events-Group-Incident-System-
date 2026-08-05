@@ -6,9 +6,15 @@ import { supabase } from '../lib/supabase'
 import { Banner, Button, Card, FieldLabel, SeverityBadge, Spinner, StatusPill } from '../components/ui'
 import { clockTime, dateShort, elapsed, stamp } from '../lib/format'
 import { RESOURCE_STATE_COLOUR, SEVERITY_COLOUR } from '../lib/style'
+import { DetailFields, DetailSummary, cleanDetails, type Details } from '../components/DetailFields'
+import { fieldsFor } from '../lib/incidentFields'
+import Evidence from '../components/Evidence'
+import ResponsePlan from '../components/ResponsePlan'
 import {
   CATEGORIES,
   COMMAND_LEVELS,
+  DISPOSALS,
+  riddorTriggered,
   SEVERITIES,
   STATUSES,
   canSignOff,
@@ -97,6 +103,9 @@ export default function IncidentDetail() {
   const [outcome, setOutcome] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [editingDetails, setEditingDetails] = useState(false)
+  const [detailDraft, setDetailDraft] = useState<Details>({})
+  const [riddorRef, setRiddorRef] = useState('')
 
   // Draft state for the editable detail panel.
   const [draft, setDraft] = useState<{
@@ -124,6 +133,7 @@ export default function IncidentDetail() {
 
     const row = inc as BoardIncident
     setIncident(row)
+    setDetailDraft(row.details ?? {})
     setTimeline((entries as TimelineEntry[]) ?? [])
     setDraft((prev) =>
       prev ?? {
@@ -355,6 +365,69 @@ export default function IncidentDetail() {
             </Card>
           )}
 
+          {/* The fields this type actually needs, with the type's response
+              plan and its evidence beside them. */}
+          {!incident.restricted && fieldsFor(incident.category).length > 0 && (
+            <Card
+              title={`${incident.category} Detail`}
+              action={
+                writable && !closed ? (
+                  <button
+                    type="button"
+                    onClick={() => setEditingDetails((v) => !v)}
+                    className="text-[11px] font-bold text-teal underline"
+                  >
+                    {editingDetails ? 'Cancel' : 'Edit'}
+                  </button>
+                ) : undefined
+              }
+            >
+              {editingDetails ? (
+                <>
+                  <DetailFields
+                    category={incident.category}
+                    details={detailDraft}
+                    onChange={setDetailDraft}
+                  />
+                  <div className="mt-3 flex justify-end gap-2">
+                    <Button
+                      disabled={busy}
+                      onClick={async () => {
+                        const ok = await applyUpdate({ details: cleanDetails(detailDraft) })
+                        if (ok) setEditingDetails(false)
+                      }}
+                    >
+                      Save detail
+                    </Button>
+                  </div>
+                </>
+              ) : Object.keys(incident.details ?? {}).length === 0 ? (
+                <p className="text-[12px] text-faint">
+                  No type-specific detail recorded yet.
+                </p>
+              ) : (
+                <DetailSummary category={incident.category} details={incident.details} />
+              )}
+            </Card>
+          )}
+
+          {!incident.restricted && (
+            <ResponsePlan
+              incidentId={incident.id}
+              eventId={incident.event_id}
+              category={incident.category}
+              writable={writable && !closed}
+            />
+          )}
+
+          {!incident.restricted && (
+            <Evidence
+              eventId={incident.event_id}
+              incidentId={incident.id}
+              writable={writable && !closed}
+            />
+          )}
+
           <Card title="Incident Timeline">
             {timeline.length === 0 ? (
               <Banner tone="info">
@@ -471,6 +544,107 @@ export default function IncidentDetail() {
               </ul>
             )}
           </Card>
+
+          {/* Disposal drives the RIDDOR duty, so the two sit together and the
+              board raises the flag rather than someone remembering later. */}
+          {!incident.restricted && (
+            <Card title="Disposal &amp; Reporting">
+              <FieldLabel htmlFor="d-disposal">CASUALTY DISPOSAL</FieldLabel>
+              <select
+                id="d-disposal"
+                disabled={!writable || closed}
+                value={incident.disposal}
+                onChange={(e) => void applyUpdate({ disposal: e.target.value })}
+                className="mb-3"
+              >
+                {DISPOSALS.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+
+              {riddorTriggered(incident.disposal) && !incident.riddor_reportable && (
+                <div className="mb-3">
+                  <Banner tone="error">
+                    Taken directly from the scene to hospital — reportable to HSE under RIDDOR
+                    regardless of how minor the injury proves. The duty falls on whoever is in
+                    control of the premises.
+                  </Banner>
+                </div>
+              )}
+
+              <label className="mb-3 flex items-start gap-2.5 text-[13px] text-ink">
+                <input
+                  type="checkbox"
+                  disabled={!writable || closed || !!incident.riddor_reported_at}
+                  checked={incident.riddor_reportable}
+                  onChange={(e) => void applyUpdate({ riddor_reportable: e.target.checked })}
+                  className="!mt-0.5 !w-auto"
+                />
+                <span>
+                  RIDDOR reportable
+                  <span className="block text-[11px] text-faint">
+                    Notify HSE without delay; the online submission is due within 10 days.
+                  </span>
+                </span>
+              </label>
+
+              {incident.riddor_reportable && (
+                <>
+                  <FieldLabel htmlFor="d-riddor-ref">HSE SUBMISSION REFERENCE</FieldLabel>
+                  {incident.riddor_reported_at ? (
+                    <p className="mb-3 text-[13px] text-ink">
+                      {incident.riddor_reference || 'submitted'}
+                      <span className="block text-[11px] text-faint">
+                        Submitted {stamp(incident.riddor_reported_at)} — locked into the record.
+                      </span>
+                    </p>
+                  ) : (
+                    <div className="mb-3 flex gap-2">
+                      <input
+                        id="d-riddor-ref"
+                        disabled={!writable || closed}
+                        value={riddorRef}
+                        onChange={(e) => setRiddorRef(e.target.value)}
+                        placeholder="F2508 reference"
+                      />
+                      <Button
+                        variant="ghost"
+                        disabled={!writable || closed || busy}
+                        onClick={() =>
+                          void applyUpdate({
+                            riddor_reference: riddorRef.trim() || null,
+                            riddor_reported_at: new Date().toISOString(),
+                            riddor_reported_by: session!.user.id,
+                          })
+                        }
+                      >
+                        Mark sent
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+
+              <label className="flex items-start gap-2.5 border-t border-line-soft pt-3 text-[13px] text-ink">
+                <input
+                  type="checkbox"
+                  disabled={!writable || closed}
+                  checked={incident.safeguarding_referral}
+                  onChange={(e) => void applyUpdate({ safeguarding_referral: e.target.checked })}
+                  className="!mt-0.5 !w-auto"
+                />
+                <span>
+                  Safeguarding referral raised
+                  <span className="block text-[11px] text-faint">
+                    Children, vulnerable adults, or anything that needs to go further than this
+                    record.
+                  </span>
+                </span>
+              </label>
+            </Card>
+          )}
 
           <Card title="Incident Details">
             <FieldLabel htmlFor="d-zone">ZONE</FieldLabel>
